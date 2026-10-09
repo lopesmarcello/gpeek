@@ -183,3 +183,6 @@ stack após validação inicial, limites definitivos, idiomas da UI e se WSL ent
 
 Marcação OK e comentários pessoais por arquivo implementados conforme ADR 0004.
 Persistência entre execuções permanece pendente.
+
+Exportação Markdown da revisão pessoal disponível na interface: contexto imutável
+da comparação, caminhos, marcação OK e comentários, sem código-fonte ou diff.

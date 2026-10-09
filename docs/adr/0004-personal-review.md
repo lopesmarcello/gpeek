@@ -10,3 +10,7 @@ Persistência é limitada à mesma origem do navegador. Como a CLI usa porta din
 uma nova execução não recupera esses dados automaticamente. Persistência entre
 execuções e comentários por linha ficam pendentes. Falha de storage é visível;
 a revisão permanece disponível em memória. Dados externos são validados ao ler.
+
+A interface exporta Markdown no navegador, sem API ou acesso ao filesystem do
+repositório. Inclui arquivos anotados de toda a comparação, sem aplicar o filtro
+da árvore; metadados e notas ficam em blocos literais com delimitadores seguros.

@@ -93,3 +93,16 @@ Validação da revisão pessoal: lint, build com tipos e 22 testes unitários
 passaram na cópia temporária. O smoke inclui OK, comentários, texto sem HTML
 ativo, recomparação e exclusão; execução bloqueada na inicialização do Chromium.
 O checkout original está somente leitura e não recebeu estas alterações.
+
+## Exportar para outra IA
+
+Clique em **Exportar revisão (.md)** após criar uma comparação. O download
+contém repositório, branches, SHAs, modo, opção de whitespace e os arquivos
+com OK ou comentários. Inclui todos os comentários adicionados, mesmo em
+arquivos ocultos pelo filtro; rascunhos ainda não adicionados ficam fora.
+Comentários são exportados como texto literal. Código-fonte e diff não entram
+no relatório. Você pode anexar o `.md` à outra IA junto do contexto necessário.
+
+Validação da exportação: lint, build com checagem de tipos e 25 testes unitários
+passaram na cópia temporária. O smoke verifica download, nome e conteúdo do
+Markdown; execução bloqueada ao iniciar Chromium por restrições de sockets.

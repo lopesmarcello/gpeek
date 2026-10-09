@@ -101,6 +101,19 @@ test('renders real branch comparison and responds to review controls', async ({
       .click();
     await expect(page.locator('.personal-comments p')).toHaveText(personalText);
     expect(await page.evaluate(() => window.untrusted)).toBeUndefined();
+    const downloadReady = page.waitForEvent('download');
+    await page
+      .getByRole('button', { name: 'Exportar revisão (.md)', exact: true })
+      .click();
+    const download = await downloadReady;
+    expect(download.suggestedFilename()).toMatch(
+      /^gpeek-review-[a-zA-Z0-9]+\.md$/,
+    );
+    const markdown = await readFile(await download.path(), 'utf8');
+    expect(markdown).toContain(personalText);
+    expect(markdown).toContain('Revisão: OK');
+    expect(markdown).toContain('Commit de trabalho:');
+
     await page
       .getByRole('button', { name: 'Comparar branches', exact: true })
       .click();

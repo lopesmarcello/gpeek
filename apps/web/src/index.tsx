@@ -1,3 +1,4 @@
+import { exportReview } from './review-export.js';
 import {
   ReviewNotes,
   annotationKey,
@@ -469,6 +470,30 @@ function App() {
                   </span>
                 </div>
               </section>
+              <button
+                className="quiet"
+                onClick={() => {
+                  const markdown = exportReview(
+                    repository.name,
+                    comparison,
+                    annotations,
+                  );
+                  const url = URL.createObjectURL(
+                    new Blob([markdown], {
+                      type: 'text/markdown;charset=utf-8',
+                    }),
+                  );
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = `gpeek-review-${comparison.headCommit.slice(0, 10).replace(/[^a-zA-Z0-9]/g, '')}.md`;
+                  document.body.append(link);
+                  link.click();
+                  link.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }}
+              >
+                Exportar revisão (.md)
+              </button>
               <p className="review-storage">
                 {
                   comparison.files.filter((item) => annotations[item.id]?.ok)
