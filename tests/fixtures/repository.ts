@@ -25,20 +25,20 @@ export async function createRepositoryFixture() {
     GIT_AUTHOR_DATE: '2020-01-01T00:00:00Z',
     GIT_COMMITTER_DATE: '2020-01-01T00:00:00Z',
   });
-  async function git(args: string[], cwd = repo) {
-    return (
-      await execute(
-        'git',
-        [
-          '-c',
-          'core.autocrlf=false',
-          '-c',
-          'core.hooksPath=' + join(root, 'no-hooks'),
-          ...args,
-        ],
-        { cwd, env, timeout: 5000, maxBuffer: 1024 * 1024, windowsHide: true },
-      )
-    ).stdout.trim();
+  async function git(args: string[], cwd = repo, input?: Buffer) {
+    const execution = execute(
+      'git',
+      [
+        '-c',
+        'core.autocrlf=false',
+        '-c',
+        'core.hooksPath=' + join(root, 'no-hooks'),
+        ...args,
+      ],
+      { cwd, env, timeout: 5000, maxBuffer: 1024 * 1024, windowsHide: true },
+    );
+    execution.child.stdin?.end(input);
+    return (await execution).stdout.trim();
   }
   const dispose = () => rm(root, { recursive: true, force: true });
   try {

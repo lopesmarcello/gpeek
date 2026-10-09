@@ -294,6 +294,7 @@ function App() {
               <label>
                 Branch base
                 <select
+                  aria-label="Branch base"
                   value={base}
                   onChange={(event) => setBase(event.target.value)}
                 >
@@ -321,6 +322,7 @@ function App() {
               <label>
                 Branch de trabalho
                 <select
+                  aria-label="Branch de trabalho"
                   value={head}
                   onChange={(event) => setHead(event.target.value)}
                 >
@@ -345,6 +347,7 @@ function App() {
               <label>
                 Modo de comparação
                 <select
+                  aria-label="Modo de comparação"
                   value={mode}
                   onChange={(event) =>
                     setMode(event.target.value as typeof mode)
@@ -387,6 +390,7 @@ function App() {
                 <label>
                   Remote
                   <select
+                    aria-label="Remote"
                     value={remote}
                     onChange={(event) => setRemote(event.target.value)}
                   >
@@ -591,6 +595,7 @@ function App() {
                           <label>
                             Visualização
                             <select
+                              aria-label="Visualização"
                               value={view}
                               onChange={(event) =>
                                 setView(event.target.value as typeof view)

@@ -145,8 +145,9 @@ Fetch só modifica o que sua política documenta. Erros de parsing não perdem d
 ### Fase 2 — Fatia vertical
 
 CLI, API e UI implementadas para teste local. O usuário confirmou execução do
-bootstrap e autorizou esta fatia; validação HTTP/E2E permanece bloqueada no
-ambiente atual. Não declarar a fase validada antes desses testes.
+bootstrap e autorizou esta fatia. Em 09/10/2026, integração HTTP/CLI e E2E
+Chromium passaram localmente fora do sandbox. Confirmação da matriz corrigida
+e demais pendências da fase 0 continuam em docs/PHASE-0.md.
 
 CLI → serviço → refs → comparação → lista → um diff real. Integrar cancelamento
 e erros. E2E seleciona uma branch local contra origin/main e verifica um hunk

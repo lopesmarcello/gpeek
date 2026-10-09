@@ -304,16 +304,23 @@ it('handles gitlinks, CRLF and byte paths without reading the working tree', asy
     const commit = await fixture.git(['rev-parse', 'HEAD']);
 
     await writeFile(join(fixture.repo, 'crlf.txt'), 'one\r\ntwo\r\n');
-    if (process.platform !== 'win32')
-      await writeFile(
-        Buffer.concat([
-          Buffer.from(fixture.repo + '/'),
-          Buffer.from([0xff]),
-          Buffer.from('.txt'),
-        ]),
-        'byte path\n',
-      );
     await fixture.git(['add', '.']);
+    // Store the byte path in Git's index: macOS/Windows filesystems cannot
+    // represent this name, but Git trees can on every supported platform.
+    const blob = await fixture.git(
+      ['hash-object', '-w', '--stdin'],
+      fixture.repo,
+      Buffer.from('byte path\n'),
+    );
+    await fixture.git(
+      ['update-index', '-z', '--index-info'],
+      fixture.repo,
+      Buffer.concat([
+        Buffer.from(`100644 ${blob}\t`),
+        Buffer.from([0xff]),
+        Buffer.from('.txt\0'),
+      ]),
+    );
     await fixture.git([
       'update-index',
       '--add',
@@ -331,14 +338,11 @@ it('handles gitlinks, CRLF and byte paths without reading the working tree', asy
     expect(
       (await fixture.review.file(result.id, crlf.id)).hunks[0]?.lines[0]?.text,
     ).toBe('one\r');
-    if (process.platform !== 'win32') {
-      const file = result.files.find((item) => item.pathEncoding === 'lossy')!;
-      expect(file).toBeDefined();
-      expect(
-        (await fixture.review.file(result.id, file.id)).hunks[0]?.lines[0]
-          ?.text,
-      ).toBe('byte path');
-    }
+    const file = result.files.find((item) => item.pathEncoding === 'lossy')!;
+    expect(file).toBeDefined();
+    expect(
+      (await fixture.review.file(result.id, file.id)).hunks[0]?.lines[0]?.text,
+    ).toBe('byte path');
   } finally {
     await fixture.dispose();
   }

@@ -1,8 +1,8 @@
 # Estado da fase 0
 
-A estrutura está implementada. A fase ainda não está encerrada: faltam validar
-instalação limpa, serviço HTTP e jornadas de navegador em um ambiente que
-permita rede e sockets locais.
+A estrutura está implementada. A fase ainda não está encerrada: faltam completar
+a verificação do lockfile e confirmar a matriz de plataformas. HTTP e jornadas
+de navegador passaram localmente em 09/10/2026 com execução fora do sandbox.
 
 O usuário confirmou que compilou e rodou a ferramenta e autorizou avançar
 até poder testar a comparação de branches. Essa confirmação não é tratada como
@@ -36,11 +36,34 @@ do npm. O lockfile usa URLs públicas, sem caminhos ou credenciais privados.
 1. Validar `npm ci` com acesso ao registro público, incluindo o Playwright e os
    binários por plataforma; completar os checksums ausentes do lockfile com os
    metadados do registro.
-2. Executar integração HTTP e lifecycle da CLI. Neste ambiente o sistema retorna
-   `listen EPERM` ao tentar abrir `127.0.0.1`, antes de testar as requisições.
-3. Instalar Chromium pelo Playwright e executar as jornadas de navegador.
+2. Integração HTTP e lifecycle da CLI: concluídos localmente em 09/10/2026
+   fora do sandbox (14 testes de integração, incluindo Git real). Dentro do
+   sandbox, sockets continuam retornando `listen EPERM`.
+3. Chromium instalado pelo Playwright; três jornadas E2E passaram localmente
+   fora do sandbox em 09/10/2026.
 4. Confirmar a matriz Linux/macOS/Windows na CI.
 
 As pendências continuam obrigatórias antes de declarar o harness concluído.
 O motor e a primeira UI de comparação avançaram sob a autorização posterior do
 usuário. Benchmarks e distribuição instalável continuam pendentes.
+
+## Correção das falhas de CI de 09/10/2026
+
+Logs da execução `37964830751` confirmaram instalação via `npm ci` nas três
+plataformas, mas a matriz falhou em etapas distintas:
+
+- Windows: Prettier rejeitou CRLF do checkout. `.gitattributes` agora fixa LF.
+- macOS: a fixture tentou escrever nome não UTF-8 no filesystem. Agora cria
+  o blob e insere o caminho em bytes pelo stdin de `git update-index -z
+--index-info`, sem exigir que o filesystem represente esse nome. A mesma
+  asserção passa a executar também no Windows.
+- Linux: o E2E não encontrou o label exato dos selects. Os selects agora têm
+  nomes acessíveis explícitos, sem incorporar o texto das opções.
+
+Após as correções, lint/fronteiras, tipos, build, 25 testes unitários,
+14 testes de integração e três E2E passaram localmente em Linux. Isso não
+confirma macOS/Windows: é necessário executar a CI novamente com as mudanças.
+
+O smoke suplementar `test:ui` também passou, incluindo marcação OK,
+comentários e download Markdown. Seu seletor de OK agora busca o checkbox
+por papel/nome, evitando ambiguidade com o indicador da árvore.

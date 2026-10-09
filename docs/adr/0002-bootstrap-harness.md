@@ -1,6 +1,7 @@
 # ADR 0002 — Workspace e harness da fase 0
 
-Status: implementado; validação HTTP/E2E e instalação limpa pendentes por restrições do ambiente.
+Status: implementado; HTTP/E2E passaram localmente em 09/10/2026 fora do sandbox.
+Verificação completa do lockfile e matriz CI corrigida permanecem pendentes.
 
 ## Decisão
 

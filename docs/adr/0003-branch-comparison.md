@@ -1,6 +1,7 @@
 # ADR 0003 — Primeira comparação de branches
 
-Status: implementado para teste local; HTTP/E2E ainda dependem de validação em ambiente sem as restrições atuais.
+Status: implementado; HTTP/E2E passaram localmente em 09/10/2026 fora do sandbox.
+Confirmação da matriz corrigida permanece pendente; veja docs/PHASE-0.md.
 
 ## Escopo e autorização
 

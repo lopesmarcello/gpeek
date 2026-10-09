@@ -90,7 +90,9 @@ test('renders real branch comparison and responds to review controls', async ({
       .click();
     await expect(page.locator('.addition pre')).toHaveText('feature');
     await expect(page.locator('.deletion pre')).toHaveText('base');
-    await page.getByLabel('Arquivo OK', { exact: true }).check();
+    await page
+      .getByRole('checkbox', { name: 'Arquivo OK', exact: true })
+      .check();
     await expect(page.locator('.review-storage')).toContainText('1 de');
     await page.getByText('Comentários pessoais (0)', { exact: true }).click();
     const personalText =
@@ -117,14 +119,18 @@ test('renders real branch comparison and responds to review controls', async ({
     await page
       .getByRole('button', { name: 'Comparar branches', exact: true })
       .click();
-    await expect(page.getByLabel('Arquivo OK', { exact: true })).toBeChecked();
+    await expect(
+      page.getByRole('checkbox', { name: 'Arquivo OK', exact: true }),
+    ).toBeChecked();
     await page.getByText('Comentários pessoais (1)', { exact: true }).click();
     await expect(page.locator('.personal-comments p')).toHaveText(personalText);
     await page
       .getByRole('button', { name: 'Excluir comentário 1', exact: true })
       .click();
     await expect(page.locator('.personal-comments p')).toHaveCount(0);
-    await page.getByLabel('Arquivo OK', { exact: true }).uncheck();
+    await page
+      .getByRole('checkbox', { name: 'Arquivo OK', exact: true })
+      .uncheck();
 
     await page
       .getByLabel('Visualização', { exact: true })

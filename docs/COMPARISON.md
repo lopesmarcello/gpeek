@@ -1,5 +1,13 @@
 # Testar a comparação de branches
 
+Validação atualizada em 09/10/2026: após corrigir as falhas do harness,
+14 testes de integração e três E2E Chromium passaram localmente fora do
+sandbox, incluindo comparação autenticada, diff unificado/lado a lado,
+reload e encerramento. Os bloqueios descritos abaixo são registros das
+sessões anteriores. A matriz macOS/Windows ainda exige nova execução na CI.
+O smoke suplementar `test:ui` também passou, incluindo revisão pessoal e
+exportação Markdown.
+
 Na pasta da ferramenta, execute:
 
 ```sh
