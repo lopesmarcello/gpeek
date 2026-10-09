@@ -5,7 +5,7 @@ Um comando inicia um serviço local e abre a interface no navegador.
 
 A primeira comparação de branches está implementada: seleção de refs locais/remotas,
 modo desde a base comum ou direto, lista de arquivos, estatísticas, diff unificado
-ou lado a lado e fetch explícito. Consulte [como testar](docs/COMPARISON.md).
+ou lado a lado, fetch explícito, marcação OK e comentários pessoais por arquivo. Consulte [como testar](docs/COMPARISON.md).
 As verificações de infraestrutura pendentes continuam em [estado da fase 0](docs/PHASE-0.md).
 
 ## Pré-requisitos e execução

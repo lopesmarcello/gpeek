@@ -1,3 +1,4 @@
+import type { Annotation } from './review-notes.js';
 import { useEffect, useMemo, useState } from 'react';
 import type { Comparison } from '@gpeek/contracts';
 
@@ -106,8 +107,10 @@ export function FileTree({
   selected,
   filter,
   onSelect,
+  annotations,
 }: {
   files: File[];
+  annotations: Record<string, Annotation>;
   selected: string;
   filter: string;
   onSelect: (id: string) => void;
@@ -188,6 +191,19 @@ export function FileTree({
                 onClick={() => onSelect(file.id)}
               >
                 <Icon folder={false} />
+                {annotations[file.id]?.ok && (
+                  <span className="review-ok" aria-label="Arquivo OK">
+                    ✓
+                  </span>
+                )}
+                {!!annotations[file.id]?.comments.length && (
+                  <span
+                    title="Comentários pessoais"
+                    aria-label="Com comentários pessoais"
+                  >
+                    ✎
+                  </span>
+                )}
                 <span className="file-name">{name}</span>
                 <span
                   className="file-stats"

@@ -79,3 +79,17 @@ adições, remoções e avisos preservam suas cores semânticas.
 Renomeação para `gpeek`: lint, build com checagem de tipos, 20 testes unitários
 e `npm link` em prefixo temporário com `gpeek --help` passaram. O smoke visual
 foi tentado novamente; Chromium não iniciou por restrições de sockets.
+
+## Revisão pessoal
+
+Use **Arquivo OK** para marcar/desmarcar o arquivo. A árvore sinaliza OK e
+comentários; o resumo mostra o progresso. Abra **Comentários pessoais** para
+adicionar ou excluir comentários em texto. Eles são privados ao navegador.
+Recomparar os mesmos commits recupera os dados no mesmo endereço; novos commits
+não herdam a revisão. Uma nova execução/porta não recupera automaticamente
+esses dados. Não há comentários por linha nesta entrega.
+
+Validação da revisão pessoal: lint, build com tipos e 22 testes unitários
+passaram na cópia temporária. O smoke inclui OK, comentários, texto sem HTML
+ativo, recomparação e exclusão; execução bloqueada na inicialização do Chromium.
+O checkout original está somente leitura e não recebeu estas alterações.

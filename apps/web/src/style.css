@@ -513,3 +513,53 @@ aside {
     max-height: 200px;
   }
 }
+
+.review-notes {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.review-notes details {
+  margin-top: 12px;
+}
+.review-notes summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.review-notes form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.review-notes form button {
+  justify-self: start;
+}
+.review-notes textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--surface-muted);
+  color: var(--foreground);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+}
+.personal-comments {
+  list-style: none;
+  padding: 0;
+}
+.personal-comments li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.personal-comments p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+}
+.review-ok {
+  color: var(--primary);
+}
+.review-storage {
+  font-size: 12px;
+}

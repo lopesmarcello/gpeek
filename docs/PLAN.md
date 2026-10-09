@@ -180,3 +180,6 @@ Nome e comando definidos: `gpeek`. Disponibilidade no registro npm ainda não ve
 
 Decisões pendentes: renderer de diff, atualização da
 stack após validação inicial, limites definitivos, idiomas da UI e se WSL entra na primeira matriz.
+
+Marcação OK e comentários pessoais por arquivo implementados conforme ADR 0004.
+Persistência entre execuções permanece pendente.

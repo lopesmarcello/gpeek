@@ -1,3 +1,9 @@
+import {
+  ReviewNotes,
+  annotationKey,
+  parseAnnotation,
+  type Annotation,
+} from './review-notes.js';
 import { FileTree } from './file-tree.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -70,6 +76,10 @@ function App() {
   const [mode, setMode] = useState<'merge-base' | 'direct'>('merge-base');
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [comparison, setComparison] = useState<Comparison>();
+  const [annotations, setAnnotations] = useState<Record<string, Annotation>>(
+    {},
+  );
+  const [storageError, setStorageError] = useState('');
   const [selected, setSelected] = useState('');
   const [diff, setDiff] = useState<FileDiff>();
   const [loading, setLoading] = useState(false);
@@ -142,6 +152,19 @@ function App() {
         ),
       );
       if (controller.signal.aborted) return;
+      const saved: Record<string, Annotation> = {};
+      try {
+        for (const item of result.files)
+          saved[item.id] = parseAnnotation(
+            localStorage.getItem(annotationKey(result, item)),
+          );
+        setStorageError('');
+      } catch {
+        setStorageError(
+          'Armazenamento indisponível. A revisão ficará apenas nesta aba.',
+        );
+      }
+      setAnnotations(saved);
       setComparison(result);
       if (result.files[0]) void selectFile(result, result.files[0].id);
     } catch (cause) {
@@ -446,6 +469,20 @@ function App() {
                   </span>
                 </div>
               </section>
+              <p className="review-storage">
+                {
+                  comparison.files.filter((item) => annotations[item.id]?.ok)
+                    .length
+                }{' '}
+                de {comparison.files.length} arquivos OK. Revisão pessoal salva
+                neste navegador e endereço; uma nova porta não recupera estes
+                dados automaticamente.
+              </p>
+              {storageError && (
+                <p role="alert" className="warning">
+                  {storageError}
+                </p>
+              )}
               {pending && (
                 <p className="warning">
                   As opções foram alteradas. Clique em Comparar branches para
@@ -480,6 +517,7 @@ function App() {
                       files={filtered}
                       selected={selected}
                       filter={filter}
+                      annotations={annotations}
                       onSelect={(id) => {
                         void selectFile(comparison, id);
                       }}
@@ -491,6 +529,29 @@ function App() {
                   <section className="diff-panel" aria-label="Diff do arquivo">
                     {file && (
                       <>
+                        <ReviewNotes
+                          key={file.id}
+                          value={
+                            annotations[file.id] ?? { ok: false, comments: [] }
+                          }
+                          onChange={(value) => {
+                            setAnnotations((previous) => ({
+                              ...previous,
+                              [file.id]: value,
+                            }));
+                            try {
+                              localStorage.setItem(
+                                annotationKey(comparison, file),
+                                JSON.stringify(value),
+                              );
+                              setStorageError('');
+                            } catch {
+                              setStorageError(
+                                'Não foi possível salvar a revisão no navegador. As alterações ficam apenas nesta aba.',
+                              );
+                            }
+                          }}
+                        />
                         <div className="file-header">
                           <div>
                             <h2>{file.newPath}</h2>
