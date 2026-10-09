@@ -1,0 +1,17 @@
+{
+  "name": "@gpeek/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@gpeek/contracts": "0.0.0",
+    "@gpeek/core": "0.0.0"
+  }
+}
