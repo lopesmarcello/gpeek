@@ -412,6 +412,8 @@ export async function openRepository(
         const patch = await run(
           temporary,
           [
+            '-c',
+            'core.autocrlf=false',
             'diff',
             '--no-index',
             '--no-ext-diff',

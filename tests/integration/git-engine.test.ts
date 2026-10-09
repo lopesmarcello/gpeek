@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { writeFile, rename, chmod, symlink, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createReviewService,
   DomainError,
@@ -301,6 +301,14 @@ describe('Git branch comparison with real repositories', () => {
 it('handles gitlinks, CRLF and byte paths without reading the working tree', async () => {
   const fixture = await setup();
   try {
+    // Reproduce Git for Windows' global autocrlf setting in an isolated home.
+    await writeFile(
+      join(fixture.root, '.gitconfig'),
+      '[core]\n\tautocrlf = true\n',
+    );
+    vi.stubEnv('HOME', fixture.root);
+    vi.stubEnv('USERPROFILE', fixture.root);
+    vi.stubEnv('XDG_CONFIG_HOME', fixture.root);
     const commit = await fixture.git(['rev-parse', 'HEAD']);
 
     await writeFile(join(fixture.repo, 'crlf.txt'), 'one\r\ntwo\r\n');
@@ -344,6 +352,7 @@ it('handles gitlinks, CRLF and byte paths without reading the working tree', asy
       (await fixture.review.file(result.id, file.id)).hunks[0]?.lines[0]?.text,
     ).toBe('byte path');
   } finally {
+    vi.unstubAllEnvs();
     await fixture.dispose();
   }
 });

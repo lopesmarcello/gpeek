@@ -39,6 +39,8 @@ versão. Para arquivos adicionados/removidos, uma das versões é vazia. O adapt
 escreve os dois conteúdos em um diretório temporário privado, em arquivos com
 modo 0600, e usa `git diff --no-index` sem filtros ou diffs externos. Remove o
 diretório em finally. Não lê o conteúdo do working tree nem segue symlinks.
+Essa operação desativa `core.autocrlf` por argumento, preservando os bytes
+dos blobs CRLF mesmo quando a configuração global ativa conversão de linhas.
 Isso evita confundir nomes e renomes com a identidade dos blobs. Depois de uma
 interrupção abrupta do processo/sistema, temporários podem permanecer no diretório
 do sistema; a limpeza garantida aplica-se à saída normal/erros controlados.

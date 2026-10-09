@@ -67,3 +67,12 @@ confirma macOS/Windows: é necessário executar a CI novamente com as mudanças.
 O smoke suplementar `test:ui` também passou, incluindo marcação OK,
 comentários e download Markdown. Seu seletor de OK agora busca o checkbox
 por papel/nome, evitando ambiguidade com o indicador da árvore.
+
+Uma execução posterior no Windows passou 13 testes de integração, mas falhou
+na preservação de CRLF. A causa foi reproduzida localmente: `core.autocrlf=true`
+global normalizava os temporários usados por `git diff --no-index`. O adaptador
+agora desativa essa conversão somente para o diff de blobs. O teste configura
+um HOME temporário com autocrlf ativo, falha antes da correção e passa depois,
+sem alterar configuração do usuário. Build/tipos, lint/fronteiras, 25 testes
+unitários e os 14 testes de integração passaram após essa mudança em Linux.
+Windows ainda exige nova execução na CI; E2E não foi repetido nesta mudança.

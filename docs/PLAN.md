@@ -141,6 +141,8 @@ shallow, sem ancestral e bases ambíguas. Testar injeção, timeouts e limites.
 Critério: resultados correspondem ao Git real em fixtures com expectativas
 independentes; repositório de origem permanece intacto nas operações de leitura.
 Fetch só modifica o que sua política documenta. Erros de parsing não perdem dados.
+O diff de blobs preserva CRLF independentemente de `core.autocrlf` global;
+o harness reproduz essa configuração em um HOME temporário isolado.
 
 ### Fase 2 — Fatia vertical
 
