@@ -50,3 +50,33 @@ it('isolates review by immutable commits, options and file paths instead of sess
     key,
   );
 });
+
+it('reads line anchors alongside legacy file comments and rejects invalid anchors', () => {
+  const comments = [
+    'Existing file note',
+    { side: 'old', line: 4, text: 'Removed implementation' },
+    { side: 'new', line: 9, text: '<img src=x>New implementation' },
+  ];
+  expect(parseAnnotation(JSON.stringify({ ok: true, comments }))).toEqual({
+    ok: true,
+    comments,
+  });
+  for (const change of [
+    { line: 0 },
+    { line: -1 },
+    { line: 1.5 },
+    { line: '1' },
+    { side: 'both' },
+    { text: '' },
+    { line: Number.MAX_SAFE_INTEGER + 1 },
+  ]) {
+    expect(
+      parseAnnotation(
+        JSON.stringify({
+          ok: false,
+          comments: [{ side: 'new', line: 1, text: 'note', ...change }],
+        }),
+      ),
+    ).toEqual({ ok: false, comments: [] });
+  }
+});

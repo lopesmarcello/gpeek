@@ -23,7 +23,7 @@ test('renders real branch comparison and responds to review controls', async ({
     await mkdir(join(fixture.repo, 'src/components'), { recursive: true });
     await writeFile(
       join(fixture.repo, 'src/components/button.ts'),
-      'export const button = true;\n',
+      '/* multiline\n * comment */\nexport const button = "<img src=x onerror=window.untrusted=true>";\n',
     );
     await writeFile(
       join(fixture.repo, 'src/components/input.ts'),
@@ -112,8 +112,8 @@ test('renders real branch comparison and responds to review controls', async ({
       /^gpeek-review-[a-zA-Z0-9]+\.md$/,
     );
     const markdown = await readFile(await download.path(), 'utf8');
-    expect(markdown).toContain(personalText);
-    expect(markdown).toContain('Revisão: OK');
+    expect(markdown).not.toContain(personalText);
+    expect(markdown).toContain('Nenhuma observação pendente.');
     expect(markdown).toContain('Commit de trabalho:');
 
     await page
@@ -132,9 +132,111 @@ test('renders real branch comparison and responds to review controls', async ({
       .getByRole('checkbox', { name: 'Arquivo OK', exact: true })
       .uncheck();
 
+    // The two versions share a line number but must keep independent notes.
+    const before = page.getByRole('region', {
+      name: 'Comentários da linha 1 · antes',
+      exact: true,
+    });
+    const after = page.getByRole('region', {
+      name: 'Comentários da linha 1 · depois',
+      exact: true,
+    });
+    await page.locator('.deletion .code').click();
+    await expect(before.getByLabel('Seu comentário')).toBeFocused();
+    await before
+      .getByLabel('Seu comentário')
+      .fill('Rever implementação removida');
+    await before
+      .getByRole('button', { name: 'Adicionar comentário', exact: true })
+      .click();
+    const newLine = page.getByRole('button', {
+      name: 'Comentar linha 1 · depois',
+      exact: true,
+    });
+    await newLine.focus();
+    await page.keyboard.press('Enter');
+    await expect(after.getByLabel('Seu comentário')).toBeFocused();
+    await after.getByLabel('Seu comentário').fill('rascunho cancelado');
+    await after.getByRole('button', { name: 'Cancelar', exact: true }).click();
+    await expect(after).toHaveCount(0);
+    await page.locator('.addition .code').click();
+    const lineText =
+      '<img src=x onerror=window.untrusted=true> Rever implementação nova';
+    await after.getByLabel('Seu comentário').fill(lineText);
+    await after
+      .getByRole('button', { name: 'Adicionar comentário', exact: true })
+      .click();
+    await expect(before.locator('.personal-comments p')).toHaveText(
+      'Rever implementação removida',
+    );
+    await expect(after.locator('.personal-comments p')).toHaveText(lineText);
+    await expect(after.locator('img')).toHaveCount(0);
     await page
-      .getByLabel('Visualização', { exact: true })
-      .selectOption('split');
+      .getByRole('button', { name: 'Lado a lado', exact: true })
+      .click();
+    await expect(before.locator('.personal-comments p')).toHaveText(
+      'Rever implementação removida',
+    );
+    await expect(after.locator('.personal-comments p')).toHaveText(lineText);
+    await page.screenshot({
+      path: 'test-results/line-comments-split.png',
+      fullPage: true,
+    });
+    await page.reload();
+    await page
+      .getByLabel('Branch base', { exact: true })
+      .selectOption('refs/remotes/origin/main');
+    await page
+      .getByLabel('Branch de trabalho', { exact: true })
+      .selectOption('refs/heads/feature');
+    await page
+      .getByRole('button', { name: 'Comparar branches', exact: true })
+      .click();
+    await expect(before.locator('.personal-comments p')).toHaveText(
+      'Rever implementação removida',
+    );
+    await expect(after.locator('.personal-comments p')).toHaveText(lineText);
+    const inlineDownloadReady = page.waitForEvent('download');
+    await page
+      .getByRole('button', { name: 'Exportar revisão (.md)', exact: true })
+      .click();
+    const inlineMarkdown = await readFile(
+      await (await inlineDownloadReady).path(),
+      'utf8',
+    );
+    expect(inlineMarkdown).toContain('Linha 1 · Antes');
+    expect(inlineMarkdown).toContain('Linha 1 · Depois');
+    expect(inlineMarkdown).toContain(lineText);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: 'test-results/line-comments-mobile.png',
+      fullPage: true,
+    });
+    expect(
+      await page
+        .locator('.diff-scroll')
+        .evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await before
+      .getByRole('button', {
+        name: 'Excluir comentário da linha 1',
+        exact: true,
+      })
+      .click();
+    await expect(before).toHaveCount(0);
+    await expect(after.locator('.personal-comments p')).toHaveText(lineText);
+    await after
+      .getByRole('button', {
+        name: 'Excluir comentário da linha 1',
+        exact: true,
+      })
+      .click();
+    await expect(after).toHaveCount(0);
+
+    await page
+      .getByRole('button', { name: 'Lado a lado', exact: true })
+      .click();
     await expect(
       page.getByRole('columnheader', { name: 'Depois', exact: true }),
     ).toBeVisible();
@@ -172,6 +274,29 @@ test('renders real branch comparison and responds to review controls', async ({
     await expect(page.locator('.file-header h2')).toHaveText(
       'src/components/button.ts',
     );
+    for (const mode of ['unified', 'split']) {
+      await page
+        .getByRole('button', {
+          name: mode === 'unified' ? 'Unificado' : 'Lado a lado',
+          exact: true,
+        })
+        .click();
+      await expect(page.locator('.code .hljs-keyword').first()).toHaveText(
+        'export',
+      );
+      await expect(page.locator('.code .hljs-comment').nth(1)).toHaveText(
+        ' * comment */',
+      );
+      await expect(page.locator('.code .hljs-string')).toHaveText(
+        '"<img src=x onerror=window.untrusted=true>"',
+      );
+      await expect(page.locator('.code img')).toHaveCount(0);
+      expect(await page.evaluate(() => window.untrusted)).toBeUndefined();
+      await page.screenshot({
+        path: `test-results/syntax-${mode}.png`,
+        fullPage: true,
+      });
+    }
     await page.getByLabel('Filtrar arquivos', { exact: true }).fill('');
     await expect(nestedFile).toHaveAttribute('aria-pressed', 'true');
     await page
@@ -190,8 +315,11 @@ test('renders real branch comparison and responds to review controls', async ({
       await page.setViewportSize({ width, height: 1000 });
       for (const view of ['unified', 'split']) {
         await page
-          .getByLabel('Visualização', { exact: true })
-          .selectOption(view);
+          .getByRole('button', {
+            name: view === 'unified' ? 'Unificado' : 'Lado a lado',
+            exact: true,
+          })
+          .click();
         const content = page.locator('.addition pre');
         await expect(content).toHaveCount(2);
         expect(

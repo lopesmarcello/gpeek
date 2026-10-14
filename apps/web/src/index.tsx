@@ -1,3 +1,4 @@
+import { DiffView } from './diff-view.js';
 import { exportReview } from './review-export.js';
 import {
   ReviewNotes,
@@ -222,6 +223,21 @@ function App() {
     }
   }
   const file = comparison?.files.find((item) => item.id === selected);
+  function saveAnnotation(value: Annotation) {
+    if (!comparison || !file) return;
+    setAnnotations((previous) => ({ ...previous, [file.id]: value }));
+    try {
+      localStorage.setItem(
+        annotationKey(comparison, file),
+        JSON.stringify(value),
+      );
+      setStorageError('');
+    } catch {
+      setStorageError(
+        'Não foi possível salvar a revisão no navegador. As alterações ficam apenas nesta aba.',
+      );
+    }
+  }
   const filtered = useMemo(
     () =>
       comparison?.files.filter((item) =>
@@ -563,23 +579,7 @@ function App() {
                           value={
                             annotations[file.id] ?? { ok: false, comments: [] }
                           }
-                          onChange={(value) => {
-                            setAnnotations((previous) => ({
-                              ...previous,
-                              [file.id]: value,
-                            }));
-                            try {
-                              localStorage.setItem(
-                                annotationKey(comparison, file),
-                                JSON.stringify(value),
-                              );
-                              setStorageError('');
-                            } catch {
-                              setStorageError(
-                                'Não foi possível salvar a revisão no navegador. As alterações ficam apenas nesta aba.',
-                              );
-                            }
-                          }}
+                          onChange={saveAnnotation}
                         />
                         <div className="file-header">
                           <div>
@@ -592,19 +592,64 @@ function App() {
                                 ` · Modo ${file.oldMode} → ${file.newMode}`}
                             </p>
                           </div>
-                          <label>
-                            Visualização
-                            <select
-                              aria-label="Visualização"
-                              value={view}
-                              onChange={(event) =>
-                                setView(event.target.value as typeof view)
-                              }
+                          <div
+                            className="view-toggle"
+                            role="group"
+                            aria-label="Visualização"
+                          >
+                            <button
+                              type="button"
+                              aria-label="Unificado"
+                              title="Unificado"
+                              aria-pressed={view === 'unified'}
+                              onClick={() => setView('unified')}
                             >
-                              <option value="unified">Unificado</option>
-                              <option value="split">Lado a lado</option>
-                            </select>
-                          </label>
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                aria-hidden="true"
+                              >
+                                <rect
+                                  x="3"
+                                  y="3"
+                                  width="18"
+                                  height="18"
+                                  rx="2"
+                                />
+                                <path d="M7 8h10M7 12h10M7 16h10" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Lado a lado"
+                              title="Lado a lado"
+                              aria-pressed={view === 'split'}
+                              onClick={() => setView('split')}
+                            >
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                aria-hidden="true"
+                              >
+                                <rect
+                                  x="3"
+                                  y="3"
+                                  width="18"
+                                  height="18"
+                                  rx="2"
+                                />
+                                <path d="M12 3v18M6 8h3M6 12h3M6 16h3M15 8h3M15 12h3M15 16h3" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                         {file.pathEncoding === 'lossy' && (
                           <p className="warning">
@@ -628,7 +673,19 @@ function App() {
                         Nenhuma mudança textual para as opções selecionadas.
                       </p>
                     )}
-                    {diff && <DiffView diff={diff} view={view} />}
+                    {diff && (
+                      <DiffView
+                        key={file?.id}
+                        annotation={
+                          annotations[selected] ?? { ok: false, comments: [] }
+                        }
+                        onChange={saveAnnotation}
+                        diff={diff}
+                        view={view}
+                        oldPath={file?.oldPath ?? ''}
+                        newPath={file?.newPath ?? ''}
+                      />
+                    )}
                   </section>
                 </div>
               )}
@@ -647,114 +704,6 @@ function App() {
       )}
     </main>
   );
-}
-function DiffView({
-  diff,
-  view,
-}: {
-  diff: FileDiff;
-  view: 'unified' | 'split';
-}) {
-  return (
-    <div
-      className={`diff-scroll ${view}`}
-      tabIndex={0}
-      aria-label="Conteúdo do diff"
-    >
-      {diff.hunks.map((hunk, index) => (
-        <div key={index}>
-          <div className="hunk-header">{hunk.header}</div>
-          {view === 'unified' ? (
-            <table className="diff-table">
-              <colgroup>
-                <col className="number-column" />
-                <col className="number-column" />
-                <col className="sign-column" />
-                <col />
-              </colgroup>
-              <thead className="sr-only">
-                <tr>
-                  <th>Linha anterior</th>
-                  <th>Linha nova</th>
-                  <th>Alteração</th>
-                  <th>Conteúdo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hunk.lines.map((line, i) => (
-                  <tr key={i} className={line.kind}>
-                    <td className="line-number">{line.oldLine}</td>
-                    <td className="line-number">{line.newLine}</td>
-                    <td className="sign">
-                      {line.kind === 'addition'
-                        ? '+'
-                        : line.kind === 'deletion'
-                          ? '−'
-                          : ''}
-                    </td>
-                    <td className="code">
-                      <pre>{line.text || ' '}</pre>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="diff-table split-table">
-              <colgroup>
-                <col className="number-column" />
-                <col className="code-column" />
-                <col className="number-column" />
-                <col className="code-column" />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th colSpan={2}>Antes</th>
-                  <th colSpan={2}>Depois</th>
-                </tr>
-              </thead>
-              <tbody>
-                {splitLines(hunk.lines).map((row, i) => (
-                  <tr key={i}>
-                    <td className="line-number">{row.old?.oldLine}</td>
-                    <td className={`code ${row.old?.kind ?? 'blank'}`}>
-                      <pre>{row.old?.text || ' '}</pre>
-                    </td>
-                    <td className="line-number">{row.next?.newLine}</td>
-                    <td className={`code ${row.next?.kind ?? 'blank'}`}>
-                      <pre>{row.next?.text || ' '}</pre>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-type Line = FileDiff['hunks'][number]['lines'][number];
-function splitLines(lines: Line[]) {
-  const rows: { old?: Line; next?: Line }[] = [];
-  for (let i = 0; i < lines.length; ) {
-    const line = lines[i]!;
-    if (line.kind === 'context' || line.kind === 'note') {
-      rows.push({ old: line, next: line });
-      i++;
-      continue;
-    }
-    const old: Line[] = [];
-    const next: Line[] = [];
-    while (lines[i]?.kind === 'deletion') old.push(lines[i++]!);
-    while (lines[i]?.kind === 'addition') next.push(lines[i++]!);
-    for (let j = 0; j < Math.max(old.length, next.length); j++)
-      rows.push({
-        ...(old[j] ? { old: old[j] } : {}),
-        ...(next[j] ? { next: next[j] } : {}),
-      });
-  }
-  return rows;
 }
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing root element');

@@ -14,6 +14,8 @@ describe('architecture boundaries', () => {
   it('allows the adapters to depend on core and the UI on contracts', () => {
     expect(violation('git', '@gpeek/core')).toBeUndefined();
     expect(violation('web', '@gpeek/contracts')).toBeUndefined();
+    expect(violation('web', 'highlight.js/lib/core')).toBeUndefined();
+    expect(violation('core', 'highlight.js')).toBeTruthy();
   });
   it('checks real source files and package manifests', async () => {
     expect(await checkBoundaries()).toEqual([]);

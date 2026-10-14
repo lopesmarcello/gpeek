@@ -33,13 +33,42 @@ test('reviews a local branch against origin/main with unified and split diff @sm
     await expect(
       page.getByRole('button', { name: /hello.txt/ }),
     ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.getByRole('button', { name: 'Unificado', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
     await page
-      .getByLabel('Visualização', { exact: true })
-      .selectOption('split');
+      .getByRole('button', { name: 'Lado a lado', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Lado a lado', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.getByRole('button', { name: 'Unificado', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
     await expect(
       panel.getByRole('columnheader', { name: 'Depois', exact: true }),
     ).toBeVisible();
     await expect(panel.locator('.addition pre')).toHaveText('feature');
+    await panel
+      .getByRole('button', { name: 'Comentar linha 1 · depois', exact: true })
+      .click();
+    const thread = panel.getByRole('region', {
+      name: 'Comentários da linha 1 · depois',
+      exact: true,
+    });
+    await thread
+      .getByLabel('Seu comentário', { exact: true })
+      .fill('Validar esta implementação');
+    await thread
+      .getByRole('button', { name: 'Adicionar comentário', exact: true })
+      .click();
+    await expect(thread.locator('.personal-comments p')).toHaveText(
+      'Validar esta implementação',
+    );
+    await page.getByRole('button', { name: 'Unificado', exact: true }).click();
+    await expect(thread.locator('.personal-comments p')).toHaveText(
+      'Validar esta implementação',
+    );
     await page.getByLabel('Filtrar arquivos', { exact: true }).fill('missing');
     await expect(
       page.getByText('Nenhum arquivo corresponde ao filtro.'),

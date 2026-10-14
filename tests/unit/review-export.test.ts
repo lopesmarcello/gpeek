@@ -25,7 +25,7 @@ const comparison = {
     },
   ],
 } as Comparison;
-it('exports immutable context, renamed files and all annotations while excluding unannotated files', () => {
+it('exports immutable context, renamed files and pending comments while excluding approved and unannotated files', () => {
   const result = exportReview('project', comparison, {
     renamed: {
       ok: false,
@@ -41,14 +41,13 @@ it('exports immutable context, renamed files and all annotations while excluding
     'refs/heads/feature',
     'old.md',
     'new.md',
-    'approved.ts',
     'Verificar validação',
     'Cobrir falha\ncom teste',
-    '1 de 3',
     'base comum',
     'espaços: sim',
   ])
     expect(result).toContain(text);
+  expect(result).not.toContain('approved.ts');
   expect(result).not.toContain('untouched.ts');
   expect(result).not.toContain('not part of this comparison');
 });
@@ -61,6 +60,49 @@ it('preserves multiline notes and fences as literal content', () => {
 });
 it('describes empty reviews instead of exporting an empty document', () => {
   expect(exportReview('project', comparison, {})).toContain(
-    'Nenhum arquivo marcado',
+    'Nenhuma observação pendente.',
   );
+});
+
+it('exports the side and line of inline comments, retaining file notes', () => {
+  const result = exportReview('project', comparison, {
+    renamed: {
+      ok: false,
+      comments: [
+        'General note',
+        { side: 'old', line: 12, text: 'Removed code' },
+        { side: 'new', line: 14, text: 'New code' },
+      ],
+    },
+  });
+  expect(result).toContain('Arquivo inteiro');
+  expect(result).toContain('General note');
+  expect(result).toContain('Linha 12 · Antes');
+  expect(result).toContain('Removed code');
+  expect(result).toContain('Linha 14 · Depois');
+  expect(result).toContain('New code');
+});
+
+it('omits approved files even with comments and keeps the compact context', () => {
+  const result = exportReview('project', comparison, {
+    approved: {
+      ok: true,
+      comments: [
+        'Resolved note',
+        { side: 'new', line: 1, text: 'Resolved line' },
+      ],
+    },
+    renamed: { ok: false, comments: ['Pending note'] },
+  });
+  expect(result).not.toContain('approved.ts');
+  expect(result).not.toContain('Resolved');
+  expect(result).toContain('Pending note');
+  expect(result).not.toContain('Revisão:');
+  expect(result).not.toContain('### Comentário');
+  expect(result.match(/Commit de trabalho:/g)).toHaveLength(1);
+  expect(
+    exportReview('project', comparison, {
+      approved: { ok: true, comments: ['Resolved'] },
+    }),
+  ).toContain('Nenhuma observação pendente.');
 });

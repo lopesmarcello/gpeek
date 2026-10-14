@@ -24,12 +24,10 @@
   --deleted: #fca5a5;
   --addition-background: color-mix(
     in oklab,
-    var(--primary) 14%,
+    var(--primary) 4%,
     var(--surface-muted)
   );
-  --addition-foreground: #bbf7d0;
-  --deletion-background: #351e22;
-  --deletion-foreground: #fecaca;
+  --deletion-background: color-mix(in oklab, #f87171 4%, var(--surface-muted));
   --warning-border: #80633b;
   --warning-foreground: #fcdba5;
   --warning-background: #2c251b;
@@ -377,9 +375,6 @@ aside {
 .file-header p {
   font-size: 11px;
 }
-.file-header label {
-  min-width: 125px;
-}
 .diff-scroll {
   overflow: auto;
   max-height: 72vh;
@@ -436,11 +431,11 @@ aside {
 }
 .addition {
   background: var(--addition-background);
-  color: var(--addition-foreground);
+  color: var(--foreground);
 }
 .deletion {
   background: var(--deletion-background);
-  color: var(--deletion-foreground);
+  color: var(--foreground);
 }
 .note {
   color: var(--warning-foreground);
@@ -562,4 +557,169 @@ aside {
 }
 .review-storage {
   font-size: 12px;
+}
+
+.addition .line-number,
+.line-number.addition,
+.addition .sign {
+  color: var(--added);
+  background: color-mix(in oklab, var(--added) 12%, var(--surface));
+}
+.deletion .line-number,
+.line-number.deletion,
+.deletion .sign {
+  color: var(--deleted);
+  background: color-mix(in oklab, var(--deleted) 12%, var(--surface));
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+  color: #c4a7e7;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #a6da95;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #969eac;
+  font-style: italic;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #efb684;
+}
+.hljs-title,
+.hljs-section {
+  color: #8aadf4;
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-attr,
+.hljs-attribute {
+  color: #eed49f;
+}
+.hljs-meta,
+.hljs-tag,
+.hljs-name {
+  color: #91d7e3;
+}
+.hljs-variable,
+.hljs-template-variable,
+.hljs-deletion {
+  color: #f0a6b6;
+}
+
+.line-comment-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-align: right;
+}
+.line-comment-trigger:hover,
+.line-comment-trigger[aria-pressed='true'] {
+  color: var(--foreground);
+  background: var(--surface-hover);
+  filter: none;
+}
+.comment-dot {
+  position: absolute;
+  left: 0;
+  color: var(--primary);
+}
+.commentable {
+  cursor: pointer;
+}
+.commentable:hover {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.diff-table .inline-comment-row > td {
+  padding: 12px 18px;
+  background: var(--surface-muted);
+  border-block: 1px solid var(--border);
+}
+.inline-threads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.inline-thread {
+  flex: 1 1 300px;
+  min-width: 0;
+  max-width: 760px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface);
+  font:
+    14px system-ui,
+    sans-serif;
+}
+.inline-thread h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.inline-thread form {
+  display: grid;
+  gap: 10px;
+}
+.inline-thread textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--surface-muted);
+  color: var(--foreground);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 10px;
+  font: inherit;
+}
+.comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.personal-comments .comment-reference {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.personal-comments p {
+  overflow-wrap: anywhere;
+}
+
+.line-comment-hint {
+  font-size: 12px;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+.view-toggle button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+.view-toggle button[aria-pressed='true'] {
+  background: var(--selection-background);
+  color: var(--primary);
+  border-color: var(--selection-border);
 }

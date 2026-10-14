@@ -188,4 +188,12 @@ Marcação OK e comentários pessoais por arquivo implementados conforme ADR 000
 Persistência entre execuções permanece pendente.
 
 Exportação Markdown da revisão pessoal disponível na interface: contexto imutável
-da comparação, caminhos, marcação OK e comentários, sem código-fonte ou diff.
+da comparação, caminhos e comentários de arquivos não OK, sem código-fonte ou diff.
+O formato compacto omite arquivos aprovados e metadados repetitivos, preservando
+as notas e suas referências de linha integralmente.
+
+Destaque de sintaxe e cores discretas do diff implementados conforme ADR 0005,
+com renderer React existente; virtualização e contexto expansível continuam pendentes.
+
+Comentários pessoais por linha implementados conforme ADR 0004: referência ao
+lado e número, visualização inline e exportação, com compatibilidade das notas gerais.

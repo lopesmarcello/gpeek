@@ -95,7 +95,18 @@ comentários; o resumo mostra o progresso. Abra **Comentários pessoais** para
 adicionar ou excluir comentários em texto. Eles são privados ao navegador.
 Recomparar os mesmos commits recupera os dados no mesmo endereço; novos commits
 não herdam a revisão. Uma nova execução/porta não recupera automaticamente
-esses dados. Não há comentários por linha nesta entrega.
+esses dados.
+
+Para comentar um trecho, clique no código ou no número da linha. O formulário
+aparece abaixo dela e identifica **Linha N · Antes/Depois**. No unificado, as
+linhas de contexto usam Depois ao clicar no código; os números permitem escolher
+Antes ou Depois. No lado a lado, clique na coluna correspondente. Os números
+também são acessíveis por Tab/Enter. Você pode adicionar várias notas à mesma
+linha, cancelar o rascunho ou excluir uma nota. Selecionar texto para copiar não
+abre o formulário. Os comentários salvos reaparecem ao alternar o modo de diff.
+Comentários gerais existentes são preservados em **Comentários pessoais**.
+A exportação Markdown inclui as referências de linha e lado. Os comentários
+continuam privados ao navegador; não são enviados ao GitHub/GitLab/Azure.
 
 Validação da revisão pessoal: lint, build com tipos e 22 testes unitários
 passaram na cópia temporária. O smoke inclui OK, comentários, texto sem HTML
@@ -106,11 +117,65 @@ O checkout original está somente leitura e não recebeu estas alterações.
 
 Clique em **Exportar revisão (.md)** após criar uma comparação. O download
 contém repositório, branches, SHAs, modo, opção de whitespace e os arquivos
-com OK ou comentários. Inclui todos os comentários adicionados, mesmo em
-arquivos ocultos pelo filtro; rascunhos ainda não adicionados ficam fora.
+não marcados como OK que tenham comentários. Inclui suas notas mesmo em
+arquivos ocultos pelo filtro; arquivos OK (inclusive suas notas) e rascunhos ficam fora.
 Comentários são exportados como texto literal. Código-fonte e diff não entram
 no relatório. Você pode anexar o `.md` à outra IA junto do contexto necessário.
 
 Validação da exportação: lint, build com checagem de tipos e 25 testes unitários
 passaram na cópia temporária. O smoke verifica download, nome e conteúdo do
 Markdown; execução bloqueada ao iniciar Chromium por restrições de sockets.
+
+## Leitura do código
+
+Diff unificado e lado a lado usam cores discretas de alteração e destaque de
+sintaxe por extensão (ADR 0005). Extensões desconhecidas e hunks acima de
+100.000 caracteres por lado ficam em texto simples. Cores de trechos que começam
+no meio de comentários/strings podem ser incompletas por falta de contexto.
+
+Validação desta mudança (13/10/2026, Linux): build/TypeScript strict,
+lint/fronteiras, 25 testes unitários, smoke UI e três E2E passaram.
+Chromium executado fora do sandbox; dentro dele, o lançamento foi bloqueado.
+O smoke cobre sintaxe nos dois modos, comentário multilinha, HTML inerte,
+preservação de espaços e quebra de linhas longas em desktop/mobile.
+A suíte de integração não foi repetida: adaptador Git e API não foram alterados.
+Matriz de plataformas e pendências da fase 0 continuam abertas.
+
+## Validação dos comentários por linha — 13/10/2026
+
+Build/TypeScript strict, lint/fronteiras e 27 testes unitários passaram em Linux.
+O smoke UI passou em Chromium fora do sandbox: inclusão pelo código e teclado,
+Antes/Depois independentes, cancelamento, exclusão, reload, exportação com linha,
+HTML inerte e layout desktop/mobile. Três E2E com servidor real também passaram,
+incluindo inclusão e troca de modo com comentário inline.
+Dentro do sandbox, a inicialização do Chromium foi bloqueada.
+A suíte de integração não foi repetida; API e adaptador Git não foram alterados.
+Matriz CI, persistência entre portas e demais pendências da fase 0 permanecem abertas.
+
+## Seletor de visualização — 14/10/2026
+
+O cabeçalho do arquivo usa dois botões com ícones para **Unificado** e
+**Lado a lado**, com dica ao passar o mouse, nomes acessíveis, foco de teclado
+e indicação da opção ativa (`aria-pressed`). A troca preserva os comentários.
+
+Build/TypeScript strict, lint/fronteiras, smoke UI (desktop/mobile) e três E2E
+passaram em Linux. O smoke precisou executar fora do sandbox após bloqueio
+na inicialização do Chromium. Integração Git e testes unitários não foram
+repetidos: contratos, API e adaptador Git não foram alterados.
+As pendências da fase 0 e da matriz CI permanecem abertas.
+
+## Exportação compacta para LLMs — 14/10/2026
+
+O relatório inclui somente arquivos não OK com comentários. Contexto imutável
+aparece uma vez; caminhos, renomes, status Git, lado e linha são preservados.
+Foram removidos contadores de aprovação, estado de revisão por arquivo e
+numeração repetitiva de arquivos/comentários. Notas permanecem integrais em
+blocos literais seguros, identificadas como dados; código e diff continuam fora.
+Não há truncamento automático nem orçamento fixo de tokens: o tamanho depende
+das observações pendentes.
+
+Validação: build/TypeScript strict, lint/fronteiras, 28 testes unitários e smoke
+UI com download Markdown passaram. Chromium executado fora do sandbox. O smoke
+confirma exclusão de notas de arquivos OK e preservação de comentários pendentes
+por linha. Integração Git e E2E com servidor não foram repetidos nesta mudança;
+API e adaptador Git permanecem sem alterações. Pendências da fase 0 continuam abertas.

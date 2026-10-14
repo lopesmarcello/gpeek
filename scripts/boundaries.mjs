@@ -52,11 +52,11 @@ export function violation(
   if (
     project === 'web' &&
     !target &&
-    !['react', 'react-dom'].some(
+    !['react', 'react-dom', 'highlight.js'].some(
       (name) => specifier === name || specifier.startsWith(name + '/'),
     )
   )
-    return 'web may only import React and contracts';
+    return 'web may only import React, highlight.js and contracts';
   return undefined;
 }
 export async function checkBoundaries() {

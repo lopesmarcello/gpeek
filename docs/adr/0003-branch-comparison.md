@@ -47,7 +47,7 @@ do sistema; a limpeza garantida aplica-se à saída normal/erros controlados.
 
 A UI mostra hunks com três linhas de contexto, números de linha, indicação
 explícita de adição/remoção e modo unificado ou lado a lado. Contexto expansível,
-syntax highlighting, virtualização, marcação de revisado e atalhos avançados
+virtualização e atalhos avançados
 continuam para a fase de experiência de revisão.
 
 ## Limites e operações

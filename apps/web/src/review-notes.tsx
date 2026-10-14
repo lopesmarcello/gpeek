@@ -1,8 +1,36 @@
 import { useState } from 'react';
 import type { Comparison } from '@gpeek/contracts';
+export interface LineAnchor {
+  side: 'old' | 'new';
+  line: number;
+}
+export type PersonalComment = string | (LineAnchor & { text: string });
+export function commentText(comment: PersonalComment): string {
+  return typeof comment === 'string' ? comment : comment.text;
+}
+export function anchorLabel(anchor: LineAnchor): string {
+  return `Linha ${anchor.line} · ${anchor.side === 'old' ? 'Antes' : 'Depois'}`;
+}
+function validComment(value: unknown): value is PersonalComment {
+  if (typeof value === 'string')
+    return value.length > 0 && value.length <= 10000;
+  if (!value || typeof value !== 'object') return false;
+  return (
+    'text' in value &&
+    typeof value.text === 'string' &&
+    value.text.length > 0 &&
+    value.text.length <= 10000 &&
+    'side' in value &&
+    (value.side === 'old' || value.side === 'new') &&
+    'line' in value &&
+    typeof value.line === 'number' &&
+    Number.isSafeInteger(value.line) &&
+    value.line > 0
+  );
+}
 export interface Annotation {
   ok: boolean;
-  comments: string[];
+  comments: PersonalComment[];
 }
 export function annotationKey(
   comparison: Comparison,
@@ -33,12 +61,9 @@ export function parseAnnotation(raw: string | null): Annotation {
       'comments' in value &&
       Array.isArray(value.comments) &&
       value.comments.length <= 100 &&
-      value.comments.every(
-        (text: unknown) =>
-          typeof text === 'string' && text.length > 0 && text.length <= 10000,
-      )
+      value.comments.every(validComment)
     )
-      return { ok: value.ok, comments: value.comments as string[] };
+      return { ok: value.ok, comments: value.comments as PersonalComment[] };
   } catch {
     /* Invalid browser data must not break the review. */
   }
@@ -51,7 +76,6 @@ export function ReviewNotes({
   value: Annotation;
   onChange: (value: Annotation) => void;
 }) {
-  const [draft, setDraft] = useState('');
   return (
     <section className="review-notes" aria-label="Revisão pessoal do arquivo">
       <label className="checkbox">
@@ -62,12 +86,18 @@ export function ReviewNotes({
         />
         Arquivo OK
       </label>
+      <p className="line-comment-hint">
+        Clique no código ou no número de uma linha para comentar aquele trecho.
+      </p>
       <details>
         <summary>Comentários pessoais ({value.comments.length})</summary>
         <ul className="personal-comments">
-          {value.comments.map((text, index) => (
+          {value.comments.map((comment, index) => (
             <li key={index}>
-              <p>{text}</p>
+              {typeof comment !== 'string' && (
+                <p className="comment-reference">{anchorLabel(comment)}</p>
+              )}
+              <p>{commentText(comment)}</p>
               <button
                 className="quiet"
                 aria-label={`Excluir comentário ${index + 1}`}
@@ -83,29 +113,60 @@ export function ReviewNotes({
             </li>
           ))}
         </ul>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const text = draft.trim();
-            if (!text || value.comments.length >= 100) return;
-            onChange({ ...value, comments: [...value.comments, text] });
-            setDraft('');
-          }}
-        >
-          <label>
-            Seu comentário
-            <textarea
-              maxLength={10000}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              rows={3}
-            />
-          </label>
-          <button disabled={!draft.trim() || value.comments.length >= 100}>
-            Adicionar comentário
-          </button>
-        </form>
+        <CommentForm
+          disabled={value.comments.length >= 100}
+          onAdd={(text) =>
+            onChange({ ...value, comments: [...value.comments, text] })
+          }
+        />
       </details>
     </section>
+  );
+}
+
+export function CommentForm({
+  disabled,
+  onAdd,
+  onCancel,
+}: {
+  disabled: boolean;
+  onAdd: (text: string) => void;
+  onCancel?: () => void;
+}) {
+  const [draft, setDraft] = useState('');
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        const text = draft.trim();
+        if (!text || disabled) return;
+        onAdd(text);
+        setDraft('');
+      }}
+    >
+      <label>
+        Seu comentário
+        <textarea
+          autoFocus={Boolean(onCancel)}
+          maxLength={10000}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          rows={3}
+        />
+      </label>
+      {disabled && (
+        <p role="status">Limite de 100 comentários por arquivo atingido.</p>
+      )}
+      <div className="comment-actions">
+        <button disabled={!draft.trim() || disabled}>
+          Adicionar comentário
+        </button>
+        {onCancel && (
+          <button type="button" className="quiet" onClick={onCancel}>
+            Cancelar
+          </button>
+        )}
+      </div>
+    </form>
   );
 }
