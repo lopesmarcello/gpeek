@@ -262,27 +262,69 @@ function App() {
     }
   }
   const file = comparison?.files.find((item) => item.id === selected);
-  function saveAnnotation(value: Annotation) {
-    if (!comparison || !file) return;
-    setAnnotations((previous) => ({ ...previous, [file.id]: value }));
+  function saveAnnotations(values: Record<string, Annotation>) {
+    if (!comparison || Object.keys(values).length === 0) return;
+    setAnnotations((previous) => ({ ...previous, ...values }));
     const comparisonId = comparison.id;
-    const fileId = file.id;
     pendingSaves.current = pendingSaves.current
       .catch(() => {})
       .then(async () => {
-        try {
-          await request(
-            `/api/comparisons/${comparisonId}/annotations/${fileId}`,
-            value,
-          );
-          setStorageError('');
-        } catch {
-          setStorageError(
-            'Não foi possível salvar a revisão local. As alterações ficam apenas nesta aba.',
-          );
+        let failed = false;
+        for (const [fileId, value] of Object.entries(values)) {
+          try {
+            await request(
+              `/api/comparisons/${comparisonId}/annotations/${fileId}`,
+              value,
+            );
+          } catch {
+            failed = true;
+          }
         }
+        setStorageError(
+          failed
+            ? 'Não foi possível salvar toda a revisão local. As alterações não salvas ficam apenas nesta aba.'
+            : '',
+        );
       });
   }
+  function saveAnnotation(value: Annotation) {
+    if (file) saveAnnotations({ [file.id]: value });
+  }
+  function approveFiles(ids: string[]) {
+    saveAnnotations(
+      Object.fromEntries(
+        ids.map((id) => [
+          id,
+          { ...(annotations[id] ?? { comments: [] }), ok: true },
+        ]),
+      ),
+    );
+  }
+  useEffect(() => {
+    function approveShortcut(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        !event.shiftKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.key.toLowerCase() !== 'a' ||
+        !file ||
+        loading ||
+        closed ||
+        (event.target instanceof HTMLElement &&
+          (event.target.isContentEditable ||
+            event.target.closest('input, textarea, select')))
+      )
+        return;
+      event.preventDefault();
+      approveFiles([file.id]);
+    }
+    window.addEventListener('keydown', approveShortcut);
+    return () => window.removeEventListener('keydown', approveShortcut);
+  });
 
   const filtered = useMemo(
     () =>
@@ -680,6 +722,7 @@ function App() {
                       selected={selected}
                       filter={filter}
                       annotations={annotations}
+                      onApprove={approveFiles}
                       onSelect={(id) => {
                         void selectFile(comparison, id);
                       }}

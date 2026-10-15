@@ -108,13 +108,16 @@ export function FileTree({
   filter,
   onSelect,
   annotations,
+  onApprove,
 }: {
   files: File[];
+  onApprove: (ids: string[]) => void;
   annotations: Record<string, Annotation>;
   selected: string;
   filter: string;
   onSelect: (id: string) => void;
 }) {
+  const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const tree = useMemo(() => buildTree(files), [files]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   useEffect(() => {
@@ -178,7 +181,18 @@ export function FileTree({
           const name = file.newPath.slice(file.newPath.lastIndexOf('/') + 1);
           const status = file.status[0] ?? '';
           return (
-            <li key={file.id}>
+            <li key={file.id} className="file-row">
+              <input
+                type="checkbox"
+                aria-label={`Selecionar ${file.newPath} para aprovação`}
+                checked={checked.has(file.id)}
+                onChange={(event) => {
+                  const next = new Set(checked);
+                  if (event.target.checked) next.add(file.id);
+                  else next.delete(file.id);
+                  setChecked(next);
+                }}
+              />
               <button
                 className={`file-button${selected === file.id ? ' selected' : ''}`}
                 aria-pressed={selected === file.id}
@@ -228,6 +242,34 @@ export function FileTree({
   }
   return (
     <>
+      <div className="batch-actions">
+        <button
+          className="quiet"
+          disabled={!files.length}
+          onClick={() =>
+            setChecked(new Set([...checked, ...files.map((file) => file.id)]))
+          }
+        >
+          Selecionar visíveis
+        </button>
+        <button
+          className="quiet"
+          disabled={!checked.size}
+          onClick={() => setChecked(new Set())}
+        >
+          Limpar seleção
+        </button>
+        <button
+          disabled={!checked.size}
+          onClick={() => {
+            onApprove([...checked]);
+            setChecked(new Set());
+          }}
+        >
+          Aprovar selecionados ({checked.size})
+        </button>
+        <small>A seleção inclui arquivos ocultos pelo filtro.</small>
+      </div>
       <div className="tree-toolbar">
         <span>Árvore de arquivos</span>
         <button

@@ -237,3 +237,24 @@ HTTP/CLI e Chromium foram executados fora do sandbox após falhas EPERM no sandb
 E2E confirma recuperar OK e comentário após reiniciar o serviço em outra porta,
 e visualizar conteúdo de adição e remoção completas. Integração cobre arquivos
 vazios e invalidação por conteúdo/modo. A matriz macOS/Windows não foi executada.
+
+## Aprovação por teclado e em lote — 15/10/2026
+
+Use **Shift+A** para aprovar o arquivo aberto. O atalho não desmarca um arquivo
+já OK e fica inativo em campos de texto/selects. Para desmarcar, use **Arquivo OK**.
+
+Na árvore, marque os checkboxes dos arquivos desejados e clique em
+**Aprovar selecionados (N)**. **Selecionar visíveis** adiciona os resultados do
+filtro à seleção, incluindo arquivos em pastas recolhidas. Você pode mudar o
+filtro e continuar selecionando: o contador inclui arquivos ocultos. Use
+**Limpar seleção** para recomeçar. Aprovar limpa a seleção; nova comparação também.
+Comentários são preservados. Se alguma gravação falhar, a interface avisa;
+a aprovação em lote não é uma transação. Você pode selecionar e aprovar novamente.
+
+Validação: build/TypeScript strict, lint/formatação/fronteiras e smoke UI passaram
+em Linux. Chromium executado fora do sandbox após bloqueio EPERM. O smoke cobre
+atalho idempotente e ignorado na busca, seleção entre filtros, persistência na
+recomparação, preservação de comentários e erro parcial seguido de gravação bem-sucedida.
+Layout mobile conferido por screenshot. Integração Git, testes unitários e E2E
+com servidor não foram repetidos; API, core e adaptador Git não foram alterados.
+Pendências da fase 0 e da matriz CI permanecem abertas.

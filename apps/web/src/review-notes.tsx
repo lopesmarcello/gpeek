@@ -36,10 +36,13 @@ export function ReviewNotes({
       <label className="checkbox">
         <input
           type="checkbox"
+          aria-label="Arquivo OK"
+          aria-keyshortcuts="Shift+A"
+          title="Aprovar arquivo atual: Shift+A"
           checked={value.ok}
           onChange={(event) => onChange({ ...value, ok: event.target.checked })}
         />
-        Arquivo OK
+        Arquivo OK (Shift+A para aprovar)
       </label>
       <p className="line-comment-hint">
         Clique no código ou no número de uma linha para comentar aquele trecho.

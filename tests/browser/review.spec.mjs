@@ -15,6 +15,7 @@ test('renders real branch comparison and responds to review controls', async ({
   const assets = fileURLToPath(
     new URL('../../apps/web/dist/', import.meta.url),
   );
+  let failNextSave = false;
   const longLines = [
     '  ' + 'Documentação longa com espaços. '.repeat(80),
     'https://example.invalid/' + 'x'.repeat(2000),
@@ -58,6 +59,15 @@ test('renders real branch comparison and responds to review controls', async ({
       ) {
         const parts = path.split('/');
         if (request.method() === 'POST') {
+          if (failNextSave) {
+            failNextSave = false;
+            await route.fulfill({
+              status: 500,
+              contentType: 'application/json',
+              body: '{}',
+            });
+            return;
+          }
           data = request.postDataJSON();
           await review.annotate(parts[3], parts[5], JSON.stringify(data));
         } else {
@@ -113,9 +123,21 @@ test('renders real branch comparison and responds to review controls', async ({
       .click();
     await expect(page.locator('.addition pre')).toHaveText('feature');
     await expect(page.locator('.deletion pre')).toHaveText('base');
-    await page
-      .getByRole('checkbox', { name: 'Arquivo OK', exact: true })
-      .check();
+    await page.getByLabel('Filtrar arquivos', { exact: true }).fill('A');
+    await page.keyboard.press('Shift+A');
+    await expect(
+      page.getByRole('checkbox', { name: 'Arquivo OK', exact: true }),
+    ).not.toBeChecked();
+    await page.getByLabel('Filtrar arquivos', { exact: true }).fill('');
+    await page.locator('.file-header h2').click();
+    await page.keyboard.press('Shift+A');
+    await expect(
+      page.getByRole('checkbox', { name: 'Arquivo OK', exact: true }),
+    ).toBeChecked();
+    await page.keyboard.press('Shift+A');
+    await expect(
+      page.getByRole('checkbox', { name: 'Arquivo OK', exact: true }),
+    ).toBeChecked();
     await expect(page.locator('.review-storage')).toContainText('1 de');
     await page.getByText('Comentários pessoais (0)', { exact: true }).click();
     const personalText =
@@ -398,6 +420,74 @@ test('renders real branch comparison and responds to review controls', async ({
       path: 'test-results/review-mobile.png',
       fullPage: true,
     });
+    await page
+      .getByLabel('Filtrar arquivos', { exact: true })
+      .fill('hello.txt');
+    await page
+      .getByRole('button', { name: 'hello.txt — Modificado', exact: true })
+      .click();
+    await page.getByText('Comentários pessoais (0)', { exact: true }).click();
+    await page
+      .getByLabel('Seu comentário', { exact: true })
+      .fill('Preservar nota na aprovação em lote');
+    await page
+      .getByRole('button', { name: 'Adicionar comentário', exact: true })
+      .click();
+    // Bulk approval keeps selected files across filters and preserves their notes.
+    await page
+      .getByLabel('Filtrar arquivos', { exact: true })
+      .fill('src/components');
+    await page
+      .getByRole('button', { name: 'Selecionar visíveis', exact: true })
+      .click();
+    await page
+      .getByLabel('Filtrar arquivos', { exact: true })
+      .fill('hello.txt');
+    await page
+      .getByRole('checkbox', {
+        name: 'Selecionar hello.txt para aprovação',
+        exact: true,
+      })
+      .check();
+    await page
+      .getByRole('button', { name: 'Aprovar selecionados (3)', exact: true })
+      .click();
+    await expect(page.locator('.review-storage')).toContainText('3 de');
+    await expect(page.locator('.personal-comments p')).toHaveText(
+      'Preservar nota na aprovação em lote',
+    );
+    await expect(
+      page.getByRole('button', {
+        name: 'Aprovar selecionados (0)',
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await page.getByLabel('Filtrar arquivos', { exact: true }).fill('');
+    await page
+      .getByRole('button', { name: 'Comparar branches', exact: true })
+      .click();
+    await expect(page.locator('.review-storage')).toContainText('3 de');
+    await expect(
+      page.getByRole('checkbox', { name: 'Arquivo OK', exact: true }),
+    ).toBeChecked();
+    // A later successful file save must not hide an earlier batch failure.
+    failNextSave = true;
+    await page
+      .getByLabel('Filtrar arquivos', { exact: true })
+      .fill('src/components');
+    await page
+      .getByRole('button', { name: 'Selecionar visíveis', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Aprovar selecionados (2)', exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        'Não foi possível salvar toda a revisão local. As alterações não salvas ficam apenas nesta aba.',
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await page.getByLabel('Filtrar arquivos', { exact: true }).fill('');
     await page
       .getByRole('button', { name: 'Analisar conflitos', exact: true })
       .click();

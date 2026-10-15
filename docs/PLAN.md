@@ -210,3 +210,7 @@ e smoke do navegador. Não inclui edição nem resolução de conflitos.
 Contexto completo por arquivo disponível sob demanda no renderer existente
 (ADR 0003): botão para expandir todo o diff e voltar aos trechos alterados.
 Expansão por lacuna e virtualização continuam pendentes.
+
+Aprovação do arquivo atual por Shift+A e aprovação em lote pela seleção da árvore
+implementadas (ADR 0004). Seleção de visíveis respeita o filtro; aprovar preserva
+comentários e informa falhas parciais de persistência.

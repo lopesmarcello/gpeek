@@ -750,3 +750,23 @@ aside {
   max-height: 32rem;
   overflow: auto;
 }
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.file-row .file-button {
+  min-width: 0;
+  flex: 1;
+}
+.batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+}
+.batch-actions small {
+  width: 100%;
+  color: var(--text-secondary);
+}

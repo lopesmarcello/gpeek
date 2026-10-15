@@ -56,3 +56,19 @@ literais continuam protegendo delimitadores e texto não confiável; isso não
 constitui garantia contra prompt injection. Não truncar notas silenciosamente
 nem impor orçamento arbitrário de tokens. Código e diff permanecem omitidos;
 o consumidor precisa consultar os commits para verificar as observações.
+
+## Aprovação por teclado e em lote — 15/10/2026
+
+Shift+A marca o arquivo atual como OK, sem alternar nem navegar. O atalho ignora
+repetição, composição e foco em campos editáveis/selects. A marcação individual
+continua permitindo desmarcar OK. A árvore oferece seleção independente do
+arquivo aberto, seleção de todos os arquivos visíveis e aprovação dos selecionados.
+Filtro e recolhimento de pastas preservam a seleção; nova comparação a descarta.
+A contagem inclui selecionados ocultos pelo filtro, com aviso na interface.
+
+Aprovar preserva comentários e usa o contrato existente de anotação por arquivo,
+com escritas serializadas no adaptador local. Não há transação entre arquivos:
+se uma gravação falha, as demais continuam e o lote exibe erro ao terminar,
+mesmo quando uma gravação posterior passa. A UI mantém o estado imediato;
+recomparar recupera somente o que foi salvo. Aprovar novamente permite reenviar
+marcações, inclusive após falha. Nenhuma alteração em Git ou nos contratos da API.
