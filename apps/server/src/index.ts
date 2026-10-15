@@ -1,3 +1,4 @@
+import { annotationSchema, fileContextSchema } from '@gpeek/contracts';
 import {
   DomainError,
   createReviewService,
@@ -69,15 +70,18 @@ function sendError(
   response.writeHead(status, { 'Content-Type': 'application/json' });
   response.end(JSON.stringify({ code, message } satisfies ApiError));
 }
-async function readBody(request: IncomingMessage): Promise<unknown> {
+async function readBody(
+  request: IncomingMessage,
+  limit = 4096,
+): Promise<unknown> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
     const buffer = Buffer.from(chunk as Uint8Array);
     size += buffer.length;
-    if (size <= 4096) chunks.push(buffer);
+    if (size <= limit) chunks.push(buffer);
   }
-  if (size > 4096) throw new Error('Body too large');
+  if (size > limit) throw new Error('Body too large');
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
 }
 export async function startLocalServer(options: {
@@ -127,7 +131,7 @@ export async function startLocalServer(options: {
       sendError(response, 403, 'FORBIDDEN');
       return;
     }
-    const path = request.url;
+    const path = request.url?.split('?')[0];
     const abort = new AbortController();
     response.once('close', () => {
       if (!response.writableFinished) abort.abort();
@@ -205,10 +209,86 @@ export async function startLocalServer(options: {
           json(await review.info(abort.signal));
           return;
         }
+        const notesRoute =
+          /^\/api\/comparisons\/([a-f0-9-]+)\/annotations(?:\/([a-f0-9-]+))?$/.exec(
+            path,
+          );
+        if (notesRoute && request.method === 'GET' && !notesRoute[2]) {
+          const saved = await review.annotations(notesRoute[1]!);
+          json(
+            Object.fromEntries(
+              Object.entries(saved).map(([id, raw]) => {
+                let value: unknown;
+                try {
+                  value = JSON.parse(raw ?? 'null');
+                } catch {
+                  value = null;
+                }
+                return [
+                  id,
+                  annotationSchema.safeParse(value).success
+                    ? value
+                    : { ok: false, comments: [] },
+                ];
+              }),
+            ),
+          );
+          return;
+        }
+        if (notesRoute?.[2] && request.method === 'POST') {
+          if (
+            request.headers.origin !== origin ||
+            request.headers['content-type'] !== 'application/json'
+          ) {
+            sendError(response, 403, 'FORBIDDEN');
+            return;
+          }
+          let input;
+          try {
+            input = annotationSchema.safeParse(
+              await readBody(request, 6 * 1024 * 1024),
+            );
+          } catch {
+            sendError(response, 400, 'INVALID_REQUEST');
+            return;
+          }
+          if (!input.success) {
+            sendError(response, 400, 'INVALID_REQUEST');
+            return;
+          }
+          await review.annotate(
+            notesRoute[1]!,
+            notesRoute[2],
+            JSON.stringify(input.data),
+          );
+          json(input.data);
+          return;
+        }
+        const conflictRoute =
+          /^\/api\/comparisons\/([a-f0-9-]+)\/conflicts$/.exec(path);
+        if (conflictRoute && request.method === 'GET') {
+          json(await review.conflicts(conflictRoute[1]!, abort.signal));
+          return;
+        }
         const fileRoute =
           /^\/api\/comparisons\/([a-f0-9-]+)\/files\/([a-f0-9-]+)$/.exec(path);
         if (fileRoute && request.method === 'GET') {
-          json(await review.file(fileRoute[1]!, fileRoute[2]!, abort.signal));
+          const context = fileContextSchema.safeParse(
+            new URL(request.url!, origin).searchParams.get('context') ??
+              'changes',
+          );
+          if (!context.success) {
+            sendError(response, 400, 'INVALID_REQUEST');
+            return;
+          }
+          json(
+            await review.file(
+              fileRoute[1]!,
+              fileRoute[2]!,
+              abort.signal,
+              context.data === 'full',
+            ),
+          );
           return;
         }
         if (

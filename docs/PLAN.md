@@ -32,7 +32,7 @@ tree e index não entram na comparação. Conteúdo LFS aparece como ponteiro.
 - **Mudanças da branch (padrão):** diff entre merge-base(base, head) e head,
   equivalente a `git diff base...head`. Explicar a direção na interface.
 - **Comparação direta:** diff entre árvores de base e head, equivalente a
-  `git diff base head`. Não confundir com uma previsão de conflitos de merge.
+  `git diff base head`. A análise de conflitos é uma ação separada (ADR 0006).
 - Resolver seleções para IDs de commit uma vez, guardando base, head e merge-base
   na sessão. Todas as páginas/hunks usam esses IDs, mesmo se as refs mudarem.
 - Listar refs completas, distinguindo `refs/heads/` e `refs/remotes/`.
@@ -102,8 +102,9 @@ Nenhum upload de código, telemetria ou banco obrigatório no MVP.
 
 Resumo primeiro, diffs sob demanda, virtualização e limites explícitos. Cancelar
 requisições obsoletas ao trocar comparação. Cache limitado por IDs de commit,
-caminhos e opções. Revisado é salvo localmente por identidade da comparação;
-mudança de commits não herda marcação automaticamente.
+caminhos e opções. Revisado e comentários são salvos no diretório Git por caminhos, objetos dos
+dois lados, modos e status; novos commits preservam notas apenas quando essa
+identidade do arquivo permanece igual (ADR 0004).
 
 Metas provisórias: em fixture de 1.000 arquivos alterados, resumo p95 <= 2s e
 primeiro arquivo textual de até 200 KiB p95 <= 500ms, após startup. Registrar
@@ -159,8 +160,8 @@ conhecido sem alterar a branch corrente ou o working tree.
 
 Escolher renderer após avaliar unified/split, expansão de contexto, virtualização,
 licença, acessibilidade e bundle. Acrescentar filtros, atalhos, whitespace e
-revisado. E2E verifica navegação por teclado, contexto, troca de modo e reset
-da marcação ao mudar commits. Screenshots ajudam a revisar layout, mas não
+revisado. E2E verifica navegação por teclado, contexto, troca de modo e persistência
+da marcação quando os conteúdos permanecem iguais. Screenshots ajudam a revisar layout, mas não
 substituem as verificações de conteúdo.
 
 ### Fase 4 — Preparação para uso
@@ -185,7 +186,7 @@ Decisões pendentes: renderer de diff, atualização da
 stack após validação inicial, limites definitivos, idiomas da UI e se WSL entra na primeira matriz.
 
 Marcação OK e comentários pessoais por arquivo implementados conforme ADR 0004.
-Persistência entre execuções permanece pendente.
+Persistência entre execuções implementada no adaptador local conforme ADR 0004.
 
 Exportação Markdown da revisão pessoal disponível na interface: contexto imutável
 da comparação, caminhos e comentários de arquivos não OK, sem código-fonte ou diff.
@@ -197,3 +198,15 @@ com renderer React existente; virtualização e contexto expansível continuam p
 
 Comentários pessoais por linha implementados conforme ADR 0004: referência ao
 lado e número, visualização inline e exportação, com compatibilidade das notas gerais.
+
+## Análise de conflitos — autorização adicional
+
+Implementar visualização de conflitos conforme ADR 0006, autorizada pelo usuário
+em 14/10/2026: ação explícita sobre SHAs da comparação, Git em bare temporário,
+diagnósticos e conteúdos com marcadores, sem alterar working tree/index/refs.
+Validar com Git real, isolamento de configuração, estabilidade da sessão, falhas
+e smoke do navegador. Não inclui edição nem resolução de conflitos.
+
+Contexto completo por arquivo disponível sob demanda no renderer existente
+(ADR 0003): botão para expandir todo o diff e voltar aos trechos alterados.
+Expansão por lacuna e virtualização continuam pendentes.

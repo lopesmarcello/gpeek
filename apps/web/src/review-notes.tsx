@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Comparison } from '@gpeek/contracts';
+import { annotationSchema } from '@gpeek/contracts';
 export interface LineAnchor {
   side: 'old' | 'new';
   line: number;
@@ -11,59 +11,14 @@ export function commentText(comment: PersonalComment): string {
 export function anchorLabel(anchor: LineAnchor): string {
   return `Linha ${anchor.line} · ${anchor.side === 'old' ? 'Antes' : 'Depois'}`;
 }
-function validComment(value: unknown): value is PersonalComment {
-  if (typeof value === 'string')
-    return value.length > 0 && value.length <= 10000;
-  if (!value || typeof value !== 'object') return false;
-  return (
-    'text' in value &&
-    typeof value.text === 'string' &&
-    value.text.length > 0 &&
-    value.text.length <= 10000 &&
-    'side' in value &&
-    (value.side === 'old' || value.side === 'new') &&
-    'line' in value &&
-    typeof value.line === 'number' &&
-    Number.isSafeInteger(value.line) &&
-    value.line > 0
-  );
-}
 export interface Annotation {
   ok: boolean;
   comments: PersonalComment[];
 }
-export function annotationKey(
-  comparison: Comparison,
-  file: Comparison['files'][number],
-): string {
-  return (
-    'gpeek:review:v1:' +
-    JSON.stringify([
-      comparison.baseCommit,
-      comparison.headCommit,
-      comparison.fromCommit,
-      comparison.mode,
-      comparison.ignoreWhitespace,
-      file.oldPath,
-      file.newPath,
-      file.status,
-    ])
-  );
-}
 export function parseAnnotation(raw: string | null): Annotation {
   try {
-    const value: unknown = JSON.parse(raw ?? 'null');
-    if (
-      value &&
-      typeof value === 'object' &&
-      'ok' in value &&
-      typeof value.ok === 'boolean' &&
-      'comments' in value &&
-      Array.isArray(value.comments) &&
-      value.comments.length <= 100 &&
-      value.comments.every(validComment)
-    )
-      return { ok: value.ok, comments: value.comments as PersonalComment[] };
+    const result = annotationSchema.safeParse(JSON.parse(raw ?? 'null'));
+    if (result.success) return result.data;
   } catch {
     /* Invalid browser data must not break the review. */
   }

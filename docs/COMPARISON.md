@@ -92,10 +92,10 @@ foi tentado novamente; Chromium não iniciou por restrições de sockets.
 
 Use **Arquivo OK** para marcar/desmarcar o arquivo. A árvore sinaliza OK e
 comentários; o resumo mostra o progresso. Abra **Comentários pessoais** para
-adicionar ou excluir comentários em texto. Eles são privados ao navegador.
-Recomparar os mesmos commits recupera os dados no mesmo endereço; novos commits
-não herdam a revisão. Uma nova execução/porta não recupera automaticamente
-esses dados.
+adicionar ou excluir comentários em texto. Eles são pessoais e salvos localmente no diretório Git.
+Recomparar ou reabrir a CLI recupera os dados se os caminhos, objetos Antes/Depois,
+modos e status do arquivo permanecem iguais; commits em outros arquivos preservam
+a revisão.
 
 Para comentar um trecho, clique no código ou no número da linha. O formulário
 aparece abaixo dela e identifica **Linha N · Antes/Depois**. No unificado, as
@@ -150,7 +150,8 @@ HTML inerte e layout desktop/mobile. Três E2E com servidor real também passara
 incluindo inclusão e troca de modo com comentário inline.
 Dentro do sandbox, a inicialização do Chromium foi bloqueada.
 A suíte de integração não foi repetida; API e adaptador Git não foram alterados.
-Matriz CI, persistência entre portas e demais pendências da fase 0 permanecem abertas.
+Naquela entrega, persistência entre portas permanecia pendente; foi implementada
+conforme a seção de persistência abaixo. Matriz CI e pendências da fase 0 permanecem abertas.
 
 ## Seletor de visualização — 14/10/2026
 
@@ -179,3 +180,60 @@ UI com download Markdown passaram. Chromium executado fora do sandbox. O smoke
 confirma exclusão de notas de arquivos OK e preservação de comentários pendentes
 por linha. Integração Git e E2E com servidor não foram repetidos nesta mudança;
 API e adaptador Git permanecem sem alterações. Pendências da fase 0 continuam abertas.
+
+## Conflitos de merge — 14/10/2026
+
+Após comparar branches, clique em **Analisar conflitos**. A análise simula integrar
+a branch de trabalho na base com os commits exibidos. É independente do modo do
+diff e de ignorar espaços. Expanda cada caminho para ver o conteúdo produzido
+pelo Git com marcadores: base, ancestral comum e trabalho. Diagnósticos também
+identificam conflitos binários, renomes e remoções que não têm marcadores.
+
+Requer Git 2.38 ou superior, histórico completo e uma única base comum. A operação
+usa repositório temporário isolado e preserva working tree, index, refs e objetos
+originais. Não usa drivers externos ou configuração personalizada de merge;
+o resultado pode variar em ambientes personalizados. Conteúdos indisponíveis ou
+acima dos limites têm avisos. Não há edição nem gravação de resoluções.
+Veja a ADR 0006 para contratos, isolamento e limites.
+
+Validação: build/TypeScript strict, lint/fronteiras, 28 testes unitários,
+17 testes de integração (Git real e API autenticada), smoke UI desktop/mobile
+com conflitos e HTML inerte e três E2E passaram em Linux. Smoke UI e integração
+HTTP precisaram executar fora do sandbox após bloqueios de Chromium/loopback.
+Matriz de plataformas e pendências da fase 0 permanecem abertas.
+
+## Visualizar arquivo completo
+
+No cabeçalho do arquivo, clique em **Visualizar arquivo completo** para incluir
+as linhas fora dos trechos alterados. **Ver apenas alterações** restaura o diff
+curto. Funciona em Unificado e Lado a lado, preservando números e comentários.
+O conteúdo vem dos commits da comparação; no modo completo, todas as diferenças
+de espaços aparecem. Binários, codificações não UTF-8, arquivos acima de 512 KiB
+por versão ou diffs acima de 10.000 linhas continuam com aviso explícito.
+
+Validação (14/10/2026): build/TypeScript strict, lint/fronteiras, 28 testes
+unitários, 18 testes de integração, smoke UI e três E2E passaram em Linux.
+Integração valida contexto completo, números de linha, conteúdo dos commits
+apesar de alterações locais e rejeição de opções inválidas na API. Smoke verifica
+ativar/desativar a opção e preservação dos comentários. Chromium e integração
+HTTP precisaram executar fora do sandbox após bloqueios de navegador/loopback.
+Pendências da fase 0, matriz CI e virtualização continuam abertas.
+
+## Persistência pessoal e arquivos adicionados/removidos
+
+OK e comentários são salvos localmente no diretório Git (`gpeek-reviews-v1`),
+inclusive entre portas/execuções da CLI. Commits que alteram outros arquivos
+preservam as notas; mudanças nos objetos Antes/Depois, caminhos, modos ou status
+invalidam a associação. As notas antigas do localStorage não são migradas.
+Falha de persistência aparece na interface; últimas gravações entre abas prevalecem.
+
+Adições completas aparecem com status A e linhas no lado Depois; remoções com
+status D e linhas no lado Antes. Arquivos vazios têm aviso explícito. Binários e
+limites continuam representados por diagnóstico. Working tree/index ficam fora.
+
+Validação desta mudança em 14/10/2026: build, tipos, lint/fronteiras, 27 testes
+unitários, 20 testes de integração com Git real, três E2E e um smoke UI passaram.
+HTTP/CLI e Chromium foram executados fora do sandbox após falhas EPERM no sandbox.
+E2E confirma recuperar OK e comentário após reiniciar o serviço em outra porta,
+e visualizar conteúdo de adição e remoção completas. Integração cobre arquivos
+vazios e invalidação por conteúdo/modo. A matriz macOS/Windows não foi executada.

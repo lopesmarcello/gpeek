@@ -6,7 +6,7 @@ Um comando inicia um serviço local e abre a interface no navegador.
 A primeira comparação de branches está implementada: seleção de refs locais/remotas,
 modo desde a base comum ou direto, lista de arquivos, estatísticas, diff unificado
 ou lado a lado, destaque de sintaxe, fetch explícito, marcação OK e comentários
-pessoais por arquivo ou linha. Consulte [como testar](docs/COMPARISON.md).
+pessoais persistidos localmente por arquivo ou linha e análise de conflitos de merge (Git >= 2.38). Consulte [como testar](docs/COMPARISON.md).
 As verificações de infraestrutura pendentes continuam em [estado da fase 0](docs/PHASE-0.md).
 
 ## Pré-requisitos e execução
@@ -86,3 +86,7 @@ Falhas de infraestrutura não são convertidas em testes aprovados ou ignorados.
 - [Decisões do harness](docs/adr/0002-bootstrap-harness.md)
 - [Estado e validação da fase 0](docs/PHASE-0.md)
 - [Instruções para implementação](AGENTS.md)
+
+Comentários e OK sobrevivem a novas execuções quando caminhos, conteúdos Antes/Depois
+e modos do arquivo permanecem iguais. Arquivos novos e removidos também aparecem
+na comparação, inclusive vazios. Somente alterações commitadas são incluídas.

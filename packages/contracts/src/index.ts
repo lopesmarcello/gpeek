@@ -111,3 +111,52 @@ export type FileDiff = z.infer<typeof fileDiffSchema>;
 export const fetchInputSchema = z
   .object({ remote: z.string().min(1).max(512) })
   .strict();
+
+export const conflictAnalysisSchema = z
+  .object({
+    clean: z.boolean(),
+    files: z.array(
+      z
+        .object({
+          path: z.string(),
+          pathEncoding: z.enum(['utf8', 'lossy']),
+          content: z.string().nullable(),
+          notice: z.string().nullable(),
+        })
+        .strict(),
+    ),
+    messages: z.array(
+      z
+        .object({
+          paths: z.array(z.string()),
+          type: z.string(),
+          message: z.string(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type ConflictAnalysis = z.infer<typeof conflictAnalysisSchema>;
+
+export const fileContextSchema = z.enum(['changes', 'full']);
+
+export const annotationSchema = z
+  .object({
+    ok: z.boolean(),
+    comments: z
+      .array(
+        z.union([
+          z.string().min(1).max(10000),
+          z
+            .object({
+              side: z.enum(['old', 'new']),
+              line: z.number().int().positive().safe(),
+              text: z.string().min(1).max(10000),
+            })
+            .strict(),
+        ]),
+      )
+      .max(100),
+  })
+  .strict();
+export const annotationsSchema = z.record(annotationSchema);

@@ -1,7 +1,14 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { randomUUID } from 'node:crypto';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  mkdtemp,
+  writeFile,
+  rm,
+  mkdir,
+  readFile,
+  rename,
+} from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -11,6 +18,7 @@ import {
   type RepositoryInfo,
   type FileDiff,
   type Hunk,
+  type ConflictAnalysis,
 } from '@gpeek/core';
 import { nulFields, decodePath, parseHunks } from './parser.js';
 const execute = promisify(execFile);
@@ -43,6 +51,8 @@ async function run(
   signal?: AbortSignal,
   accepted = [0],
   timeout = 15000,
+  environment: NodeJS.ProcessEnv = {},
+  reportExit?: (code: number) => void,
 ): Promise<Buffer> {
   try {
     const { stdout } = await execute(
@@ -61,7 +71,7 @@ async function run(
       ],
       {
         cwd,
-        env: cleanEnvironment(),
+        env: { ...cleanEnvironment(), ...environment },
         encoding: 'buffer',
         timeout,
         maxBuffer: MAX_OUTPUT,
@@ -69,6 +79,7 @@ async function run(
         ...(signal ? { signal } : {}),
       },
     );
+    reportExit?.(0);
     return stdout;
   } catch (cause) {
     const error = cause as {
@@ -77,8 +88,10 @@ async function run(
       killed?: boolean;
       name?: string;
     };
-    if (typeof error.code === 'number' && accepted.includes(error.code))
+    if (typeof error.code === 'number' && accepted.includes(error.code)) {
+      reportExit?.(error.code);
       return error.stdout ?? Buffer.alloc(0);
+    }
     if (error.name === 'AbortError')
       throw new DomainError('CANCELLED', 'Operação cancelada.');
     if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER')
@@ -119,6 +132,16 @@ export async function openRepository(
       'NOT_REPOSITORY',
       'Informe um repositório Git local válido com --repo /caminho. Repositórios bare não são suportados nesta versão.',
     );
+  }
+  const gitDirectory = (await run(root, ['rev-parse', '--absolute-git-dir']))
+    .toString('utf8')
+    .trimEnd();
+  const reviewsDirectory = join(gitDirectory, 'gpeek-reviews-v1');
+  const reviewKeys = new Map<string, string>();
+  function reviewPath(file: ChangedFile): string {
+    const key = reviewKeys.get(file.id);
+    if (!key) throw new DomainError('NOT_FOUND', 'Arquivo expirado.');
+    return join(reviewsDirectory, key + '.json');
   }
   const objects = new Map<string, Objects>();
   let lastFetch: string | null = null;
@@ -209,6 +232,220 @@ export async function openRepository(
   }
   return {
     info,
+    async conflicts(base, head, signal) {
+      const version = await checkGitVersion();
+      const match = /git version (\d+)\.(\d+)/.exec(version);
+      if (
+        !match ||
+        Number(match[1]) < 2 ||
+        (Number(match[1]) === 2 && Number(match[2]) < 38)
+      )
+        throw new DomainError(
+          'GIT_ERROR',
+          'Análise de conflitos requer Git 2.38 ou superior.',
+        );
+      const temporary = await mkdtemp(join(tmpdir(), 'gpeek-conflicts-'));
+      const isolated = {
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_GLOBAL: join(temporary, 'empty-config'),
+        GIT_ATTR_NOSYSTEM: '1',
+      };
+      try {
+        await writeFile(isolated.GIT_CONFIG_GLOBAL, '');
+        const format = (
+          await run(root, ['rev-parse', '--show-object-format'], signal)
+        )
+          .toString('utf8')
+          .trim();
+        await run(
+          temporary,
+          [
+            'init',
+            '--bare',
+            '--template=',
+            `--object-format=${format}`,
+            temporary,
+          ],
+          signal,
+          [0],
+          15000,
+          isolated,
+        );
+        const objectDirectory = (
+          await run(
+            root,
+            ['rev-parse', '--path-format=absolute', '--git-path', 'objects'],
+            signal,
+          )
+        )
+          .toString('utf8')
+          .replace(/\r?\n$/, '');
+        const environment = {
+          ...isolated,
+          GIT_ALTERNATE_OBJECT_DIRECTORIES: JSON.stringify(objectDirectory),
+        };
+        let exit = 0;
+        const fields = nulFields(
+          await run(
+            temporary,
+            [
+              '-c',
+              'merge.conflictStyle=diff3',
+              '-c',
+              'core.hooksPath=',
+              'merge-tree',
+              '--write-tree',
+              '--messages',
+              '-z',
+              base,
+              head,
+            ],
+            signal,
+            [0, 1],
+            15000,
+            environment,
+            (code) => {
+              exit = code;
+            },
+          ),
+        );
+        const tree = fields.shift()?.toString('ascii');
+        if (!tree || !/^[a-f0-9]{40,64}$/.test(tree))
+          throw new DomainError(
+            'GIT_ERROR',
+            'Resposta de merge-tree inválida.',
+          );
+        const paths = new Map<string, Buffer>();
+        while (fields.length && fields[0]!.length) {
+          const field = fields.shift()!;
+          const tab = field.indexOf(9);
+          if (
+            tab < 0 ||
+            !/^\d{6} [a-f0-9]{40,64} [123]$/.test(
+              field.subarray(0, tab).toString('ascii'),
+            )
+          )
+            throw new DomainError('GIT_ERROR', 'Stages de conflito inválidos.');
+          const path = field.subarray(tab + 1);
+          paths.set(path.toString('hex'), path);
+        }
+        if (fields[0]?.length === 0) fields.shift();
+        const messages: ConflictAnalysis['messages'] = [];
+        while (fields.length && fields[0]!.length) {
+          const count = Number(fields.shift()!.toString('ascii'));
+          if (
+            !Number.isSafeInteger(count) ||
+            count < 0 ||
+            count + 2 > fields.length
+          )
+            throw new DomainError(
+              'GIT_ERROR',
+              'Mensagem de conflito inválida.',
+            );
+          const affected = fields.splice(0, count);
+          const type = fields.shift()!.toString('utf8');
+          const message = fields.shift()!.toString('utf8');
+          if (type.startsWith('CONFLICT'))
+            messages.push({
+              paths: affected.map((path) => decodePath(path).path),
+              type,
+              message,
+            });
+        }
+        if (paths.size > 10000)
+          throw new DomainError(
+            'CONTENT_LIMIT',
+            'Mais de 10.000 arquivos em conflito.',
+          );
+        const entries = new Map<string, { mode: string; object: string }>();
+        for (const field of nulFields(
+          await run(
+            temporary,
+            ['ls-tree', '-r', '-z', tree],
+            signal,
+            [0],
+            15000,
+            environment,
+          ),
+        )) {
+          if (!field.length) continue;
+          const tab = field.indexOf(9);
+          const [mode, , object] = field
+            .subarray(0, tab)
+            .toString('ascii')
+            .split(' ');
+          if (mode && object)
+            entries.set(field.subarray(tab + 1).toString('hex'), {
+              mode,
+              object,
+            });
+        }
+        const files: ConflictAnalysis['files'] = [];
+        let budget = 2 * 1024 * 1024;
+        for (const [key, path] of paths) {
+          const decoded = decodePath(path);
+          const entry = entries.get(key);
+          let content: string | null = null;
+          let notice: string | null = null;
+          if (!entry || !['100644', '100755'].includes(entry.mode))
+            notice =
+              'Conflito de metadados, remoção, symlink ou submódulo; consulte o diagnóstico.';
+          else {
+            const size = Number(
+              (
+                await run(
+                  temporary,
+                  ['cat-file', '-s', entry.object],
+                  signal,
+                  [0],
+                  15000,
+                  environment,
+                )
+              ).toString('ascii'),
+            );
+            if (size > MAX_BLOB || size > budget)
+              notice =
+                'Conteúdo acima do limite (512 KiB por arquivo, 2 MiB por análise).';
+            else {
+              const blob = await run(
+                temporary,
+                ['cat-file', 'blob', entry.object],
+                signal,
+                [0],
+                15000,
+                environment,
+              );
+              budget -= blob.length;
+              if (blob.includes(0))
+                notice = 'Arquivo binário: visualização textual indisponível.';
+              else {
+                try {
+                  content = new TextDecoder('utf-8', { fatal: true }).decode(
+                    blob,
+                  );
+                } catch {
+                  notice =
+                    'Conteúdo fora de UTF-8: visualização textual indisponível.';
+                }
+                if (content && content.split('\n').length > 10000) {
+                  content = null;
+                  notice = 'Conteúdo excede 10.000 linhas.';
+                }
+              }
+            }
+          }
+          files.push({
+            path: decoded.path,
+            pathEncoding: decoded.lossy ? 'lossy' : 'utf8',
+            content,
+            notice,
+          });
+        }
+        return { clean: exit === 0, files, messages };
+      } finally {
+        await rm(temporary, { recursive: true, force: true });
+      }
+    },
     async resolveRef(name, signal) {
       if (!(await info(signal)).refs.some((ref) => ref.name === name))
         throw new DomainError(
@@ -323,6 +560,22 @@ export async function openRepository(
           oldObject: header[3]!,
           newObject: header[4]!,
         });
+        reviewKeys.set(
+          id,
+          createHash('sha256')
+            .update(
+              JSON.stringify([
+                oldPathBytes.toString('base64'),
+                newPathBytes.toString('base64'),
+                header[1],
+                header[2],
+                header[3],
+                header[4],
+                header[5],
+              ]),
+            )
+            .digest('hex'),
+        );
         files.push({
           id,
           oldPath: oldPath.path,
@@ -348,7 +601,12 @@ export async function openRepository(
       for (const [id, value] of pendingObjects) objects.set(id, value);
       return files;
     },
-    async diff(file, ignoreWhitespace, signal): Promise<FileDiff> {
+    async diff(
+      file,
+      ignoreWhitespace,
+      signal,
+      fullContext = false,
+    ): Promise<FileDiff> {
       const ids = objects.get(file.id);
       if (!ids)
         throw new DomainError(
@@ -420,12 +678,12 @@ export async function openRepository(
             '--no-textconv',
             '--no-color',
             '--diff-algorithm=myers',
-            '--unified=3',
+            fullContext ? '--unified=10000' : '--unified=3',
             '--inter-hunk-context=0',
             '--output-indicator-new=+',
             '--output-indicator-old=-',
             '--output-indicator-context= ',
-            ...(ignoreWhitespace ? ['-w'] : []),
+            ...(ignoreWhitespace && !fullContext ? ['-w'] : []),
             '--',
             'before',
             'after',
@@ -441,19 +699,74 @@ export async function openRepository(
             return { ...result, notice: error.message };
           throw error;
         }
+        if (fullContext && old.equals(next) && next.length) {
+          const lines = next.toString('utf8').split('\n');
+          if (lines.at(-1) === '') lines.pop();
+          if (lines.length > 10000)
+            return {
+              ...result,
+              notice: 'Arquivo acima de 10.000 linhas. Consulte pelo terminal.',
+            };
+          hunks = [
+            {
+              header: 'Arquivo completo · Antes / Depois',
+              lines: lines.map((text, index) => ({
+                kind: 'context' as const,
+                text,
+                oldLine: index + 1,
+                newLine: index + 1,
+              })),
+            },
+          ];
+        }
         return {
           ...result,
           hunks,
-          notice: old.equals(next)
-            ? 'Somente metadados ou caminho foram alterados.'
-            : null,
+          notice:
+            file.status === 'A' && next.length === 0
+              ? 'Arquivo novo vazio.'
+              : file.status === 'D' && old.length === 0
+                ? 'Arquivo vazio removido.'
+                : !fullContext && old.equals(next)
+                  ? 'Somente metadados ou caminho foram alterados.'
+                  : null,
         };
       } finally {
         await rm(temporary, { recursive: true, force: true });
       }
     },
+    async readReview(file) {
+      try {
+        return await readFile(reviewPath(file), 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw new DomainError(
+          'GIT_ERROR',
+          'Não foi possível ler a revisão local.',
+        );
+      }
+    },
+    async writeReview(file, value) {
+      const destination = reviewPath(file);
+      const temporary = destination + '.' + randomUUID();
+      try {
+        await mkdir(reviewsDirectory, { recursive: true, mode: 0o700 });
+        await writeFile(temporary, value, { mode: 0o600, flag: 'wx' });
+        await rename(temporary, destination);
+      } catch {
+        throw new DomainError(
+          'GIT_ERROR',
+          'Não foi possível salvar a revisão local.',
+        );
+      } finally {
+        await rm(temporary, { force: true });
+      }
+    },
     release(files) {
-      for (const file of files) objects.delete(file.id);
+      for (const file of files) {
+        objects.delete(file.id);
+        reviewKeys.delete(file.id);
+      }
     },
     async fetch(remote, signal) {
       if (!(await info(signal)).remotes.includes(remote))

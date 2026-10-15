@@ -137,6 +137,10 @@ describe('Git branch comparison with real repositories', () => {
         (await fixture.review.file(result.id, deleted.id)).hunks[0]?.lines[0]
           ?.text,
       ).toBe('removed');
+      const emptyAdded = result.files.find((f) => f.newPath === 'empty.txt')!;
+      expect((await fixture.review.file(result.id, emptyAdded.id)).notice).toBe(
+        'Arquivo novo vazio.',
+      );
       const noNewline = result.files.find(
         (file) => file.newPath === 'newline.txt',
       )!;
@@ -175,15 +179,15 @@ describe('Git branch comparison with real repositories', () => {
       await expect(
         fixture.review.compare({ ...input, baseRef: 'refs/heads/unrelated' }),
       ).rejects.toMatchObject({ code: 'NO_MERGE_BASE' });
-      expect(
-        (
-          await fixture.review.compare({
-            ...input,
-            baseRef: 'refs/heads/unrelated',
-            mode: 'direct',
-          })
-        ).files,
-      ).toEqual([]);
+      const unrelatedComparison = await fixture.review.compare({
+        ...input,
+        baseRef: 'refs/heads/unrelated',
+        mode: 'direct',
+      });
+      expect(unrelatedComparison.files).toEqual([]);
+      await expect(
+        fixture.review.conflicts(unrelatedComparison.id),
+      ).rejects.toMatchObject({ code: 'NO_MERGE_BASE' });
       const a = await fixture.git([
         'commit-tree',
         tree,
@@ -228,6 +232,15 @@ describe('Git branch comparison with real repositories', () => {
           baseRef: 'refs/heads/criss-a',
           headRef: 'refs/heads/criss-b',
         }),
+      ).rejects.toMatchObject({ code: 'AMBIGUOUS_BASE' });
+      const ambiguous = await fixture.review.compare({
+        ...input,
+        baseRef: 'refs/heads/criss-a',
+        headRef: 'refs/heads/criss-b',
+        mode: 'direct',
+      });
+      await expect(
+        fixture.review.conflicts(ambiguous.id),
       ).rejects.toMatchObject({ code: 'AMBIGUOUS_BASE' });
       await expect(
         fixture.review.compare({ ...input, headRef: '--help' }),
@@ -419,6 +432,137 @@ it('reports a line rendering limit without presenting a large diff as empty', as
     expect(
       (await fixture.review.file(comparison.id, file.id)).notice,
     ).toContain('10.000 linhas');
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+it('expands complete immutable file context and retains original line numbers', async () => {
+  const fixture = await setup();
+  try {
+    const original = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`);
+    await writeFile(
+      join(fixture.repo, 'context.txt'),
+      original.join('\n') + '\n',
+    );
+    await fixture.git(['add', '.']);
+    await fixture.git(['commit', '-m', 'context base']);
+    await fixture.git(['branch', 'context-base']);
+    const changed = [...original];
+    changed[14] = 'changed middle';
+    await writeFile(
+      join(fixture.repo, 'context.txt'),
+      changed.join('\n') + '\n',
+    );
+    await fixture.git(['commit', '-am', 'context change']);
+    const comparison = await fixture.review.compare({
+      ...input,
+      baseRef: 'refs/heads/context-base',
+    });
+    const file = comparison.files.find(
+      (item) => item.newPath === 'context.txt',
+    )!;
+    const limited = await fixture.review.file(comparison.id, file.id);
+    expect(
+      limited.hunks.flatMap((h) => h.lines).some((l) => l.text === 'line 1'),
+    ).toBe(false);
+    await writeFile(join(fixture.repo, 'context.txt'), 'uncommitted content');
+    const full = await fixture.review.file(
+      comparison.id,
+      file.id,
+      undefined,
+      true,
+    );
+    const lines = full.hunks.flatMap((h) => h.lines);
+    expect(lines[0]).toMatchObject({ text: 'line 1', oldLine: 1, newLine: 1 });
+    expect(lines.at(-1)).toMatchObject({
+      text: 'line 30',
+      oldLine: 30,
+      newLine: 30,
+    });
+    expect(lines.find((l) => l.kind === 'addition')).toMatchObject({
+      text: 'changed middle',
+      newLine: 15,
+    });
+    expect(lines.some((l) => l.text === 'uncommitted content')).toBe(false);
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+it('persists review across adapter restarts and unrelated commits, invalidating changed content and modes', async () => {
+  const fixture = await setup();
+  try {
+    const first = await fixture.review.compare(input);
+    const annotation = JSON.stringify({
+      ok: true,
+      comments: [{ side: 'new', line: 1, text: 'Reviewed' }],
+    });
+    await fixture.review.annotate(first.id, first.files[0]!.id, annotation);
+    await writeFile(
+      join(fixture.repo, 'new.txt'),
+      'entirely new\nsecond line\n',
+    );
+    await fixture.git(['add', '.']);
+    await fixture.git(['commit', '-m', 'unrelated']);
+    const restarted = createReviewService(
+      await openRepository(fixture.repo),
+      randomUUID,
+    );
+    const next = await restarted.compare(input);
+    const unchanged = next.files.find((f) => f.newPath === 'hello.txt')!;
+    expect((await restarted.annotations(next.id))[unchanged.id]).toBe(
+      annotation,
+    );
+    const added = next.files.find((f) => f.newPath === 'new.txt')!;
+    expect(added.status).toBe('A');
+    expect(
+      (await restarted.file(next.id, added.id)).hunks
+        .flatMap((h) => h.lines)
+        .filter((l) => l.kind === 'addition')
+        .map((l) => l.text),
+    ).toEqual(['entirely new', 'second line']);
+    await fixture.git(['update-index', '--chmod=+x', 'hello.txt']);
+    await fixture.git(['commit', '-m', 'mode change']);
+    const modeChanged = await restarted.compare(input);
+    expect(
+      (await restarted.annotations(modeChanged.id))[
+        modeChanged.files.find((f) => f.newPath === 'hello.txt')!.id
+      ],
+    ).toBeNull();
+    await fixture.git(['update-index', '--chmod=-x', 'hello.txt']);
+    await fixture.git(['commit', '-m', 'restore mode']);
+    await writeFile(join(fixture.repo, 'hello.txt'), 'changed\n');
+    await fixture.git(['commit', '-am', 'changed']);
+    const changed = await restarted.compare(input);
+    expect(
+      (await restarted.annotations(changed.id))[
+        changed.files.find((f) => f.newPath === 'hello.txt')!.id
+      ],
+    ).toBeNull();
+    expect(await fixture.git(['status', '--porcelain'])).toBe('');
+  } finally {
+    await fixture.dispose();
+  }
+});
+
+it('represents a fully deleted empty file explicitly', async () => {
+  const fixture = await setup();
+  try {
+    await writeFile(join(fixture.repo, 'empty.txt'), '');
+    await fixture.git(['add', '.']);
+    await fixture.git(['commit', '-m', 'empty file']);
+    await fixture.git(['branch', 'empty-base']);
+    await fixture.git(['rm', '--', 'empty.txt']);
+    await fixture.git(['commit', '-m', 'delete empty']);
+    const result = await fixture.review.compare({
+      ...input,
+      baseRef: 'refs/heads/empty-base',
+    });
+    expect(result.files[0]!.status).toBe('D');
+    expect(
+      (await fixture.review.file(result.id, result.files[0]!.id)).notice,
+    ).toBe('Arquivo vazio removido.');
   } finally {
     await fixture.dispose();
   }

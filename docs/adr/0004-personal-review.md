@@ -1,16 +1,21 @@
 # ADR 0004 — Revisão pessoal no navegador
 
-Marcação OK e múltiplos comentários em texto por arquivo ficam no localStorage,
-sem envio ao servidor ou operações Git. Chaves incluem base, head, início do diff,
-modo, whitespace e caminhos antigo/novo. Novos commits não herdam aprovação.
-Comentários podem ser excluídos; texto é renderizado pelo React sem HTML ativo.
-Limites: 100 comentários por arquivo, 10.000 caracteres por comentário.
+Marcação OK e comentários são persistidos pelo adaptador local em
+`gpeek-reviews-v1` dentro do diretório Git da sessão. Não entram no working tree,
+index ou refs, nem são compartilhados por Git. A API autenticada valida entrada
+externa e o navegador mantém estado imediato; falhas de leitura/escrita são visíveis.
+O core recebe uma porta de leitura/escrita sem depender de filesystem ou HTTP.
 
-Persistência é limitada à mesma origem do navegador. Como a CLI usa porta dinâmica,
-uma nova execução não recupera esses dados automaticamente. Persistência entre
-execuções permanece pendente. Comentários por linha foram adicionados conforme
-a decisão abaixo. Falha de storage é visível;
-a revisão permanece disponível em memória. Dados externos são validados ao ler.
+Cada arquivo usa uma chave SHA-256 dos caminhos em bytes, objetos Antes/Depois,
+modos e status. Commits que alteram outros arquivos preservam OK e comentários;
+alterações em qualquer lado, modo ou caminho iniciam uma revisão vazia. Opções de
+visualização e whitespace não invalidam a identidade dos conteúdos. Reabrir a CLI
+em outra porta recupera as notas. Worktrees têm armazenamento próprio no seu diretório Git.
+Escritas usam arquivo temporário privado e rename; saves da aba são serializados.
+Limites: 100 comentários por arquivo, 10.000 caracteres por comentário.
+Texto é renderizado pelo React sem HTML ativo; dados lidos são validados.
+Notas antigas em localStorage não são migradas automaticamente. Duas abas podem
+sobrescrever a mesma anotação; a última gravação vence. Rascunhos não são salvos.
 
 A interface exporta Markdown no navegador, sem API ou acesso ao filesystem do
 repositório. Inclui somente arquivos não OK com comentários de toda a comparação, sem aplicar
@@ -19,11 +24,10 @@ o filtro da árvore; metadados e notas ficam em blocos literais com delimitadore
 ## Comentários por linha
 
 Comentários podem ser strings legadas (arquivo inteiro) ou objetos com texto,
-lado `old`/`new` e número inteiro positivo da linha. A mesma chave de storage
-é mantida para recuperar notas existentes. A leitura valida os dois formatos;
+lado `old`/`new` e número inteiro positivo da linha. O armazenamento aceita os dois formatos. A leitura valida os dois formatos;
 limites de quantidade e texto são compartilhados entre comentários gerais e por linha.
 
-A referência pertence ao caminho e aos commits imutáveis da comparação:
+A referência pertence ao caminho e aos objetos imutáveis dos dois lados:
 `old` representa o blob inicial do diff (`fromCommit`) e `new` o blob do head.
 Nunca é uma referência ao working tree. No unificado, clicar no código de contexto
 usa o lado novo; os dois números permitem escolher explicitamente o lado.
@@ -35,7 +39,7 @@ Números de linha são botões acessíveis por teclado; selecionar texto não ab
 A exportação inclui lado e número, junto dos caminhos e SHAs já presentes,
 sem incorporar código-fonte. Comentários antigos mantêm a indicação de arquivo inteiro.
 A funcionalidade é local e pessoal: não publica comentários em provedores Git.
-Não inclui seleção de intervalos, edição de comentários ou persistência entre portas.
+Não inclui seleção de intervalos nem edição de comentários.
 Rascunhos não são persistidos e são descartados ao trocar arquivo ou comparação.
 
 ## Exportação compacta para consumo por LLMs

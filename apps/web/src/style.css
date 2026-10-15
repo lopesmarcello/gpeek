@@ -723,3 +723,30 @@ aside {
   color: var(--primary);
   border-color: var(--selection-border);
 }
+
+.conflicts {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.conflicts details {
+  margin-top: 1rem;
+}
+.conflicts summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.conflicts pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+.conflict-content {
+  padding: 1rem;
+  background: #18181b;
+  color: #fafafa;
+  border-left: 3px solid #eab308;
+  max-height: 32rem;
+  overflow: auto;
+}

@@ -51,9 +51,32 @@ test('renders real branch comparison and responds to review controls', async ({
       else if (path === '/api/repository') data = await review.info();
       else if (path === '/api/comparisons')
         data = await review.compare(request.postDataJSON());
-      else if (path.startsWith('/api/comparisons/')) {
+      else if (/^\/api\/comparisons\/[^/]+\/conflicts$/.test(path))
+        data = await review.conflicts(path.split('/')[3]);
+      else if (
+        /^\/api\/comparisons\/[^/]+\/annotations(?:\/[^/]+)?$/.test(path)
+      ) {
         const parts = path.split('/');
-        data = await review.file(parts[3], parts[5]);
+        if (request.method() === 'POST') {
+          data = request.postDataJSON();
+          await review.annotate(parts[3], parts[5], JSON.stringify(data));
+        } else {
+          const saved = await review.annotations(parts[3]);
+          data = Object.fromEntries(
+            Object.entries(saved).map(([id, raw]) => [
+              id,
+              raw ? JSON.parse(raw) : { ok: false, comments: [] },
+            ]),
+          );
+        }
+      } else if (path.startsWith('/api/comparisons/')) {
+        const parts = path.split('/');
+        data = await review.file(
+          parts[3],
+          parts[5],
+          undefined,
+          new URL(request.url()).searchParams.get('context') === 'full',
+        );
       } else {
         if (path !== '/' && !/^\/assets\/[a-zA-Z0-9._-]+$/.test(path)) {
           await route.fulfill({ status: 404 });
@@ -171,6 +194,26 @@ test('renders real branch comparison and responds to review controls', async ({
     );
     await expect(after.locator('.personal-comments p')).toHaveText(lineText);
     await expect(after.locator('img')).toHaveCount(0);
+    await page
+      .getByRole('button', { name: 'Visualizar arquivo completo', exact: true })
+      .click();
+    await expect(
+      page.getByText('Arquivo completo · Antes / Depois dos commits', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Ver apenas alterações', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await page
+      .getByRole('button', { name: 'Ver apenas alterações', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', {
+        name: 'Visualizar arquivo completo',
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-pressed', 'false');
     await page
       .getByRole('button', { name: 'Lado a lado', exact: true })
       .click();
@@ -355,6 +398,59 @@ test('renders real branch comparison and responds to review controls', async ({
       path: 'test-results/review-mobile.png',
       fullPage: true,
     });
+    await page
+      .getByRole('button', { name: 'Analisar conflitos', exact: true })
+      .click();
+    await expect(
+      page.getByText('Nenhum conflito encontrado para estes commits.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await fixture.git(['switch', 'main']);
+    await writeFile(
+      join(fixture.repo, 'hello.txt'),
+      '<img src=x onerror=window.conflictUnsafe=true>\n',
+    );
+    await fixture.git(['commit', '-am', 'conflicting base']);
+    await page
+      .getByLabel('Branch base', { exact: true })
+      .selectOption('refs/heads/main');
+    await page
+      .getByRole('button', { name: 'Comparar branches', exact: true })
+      .click();
+    await expect(
+      page.getByText('Nenhum conflito encontrado para estes commits.', {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('button', { name: 'Analisar conflitos', exact: true })
+      .click();
+    await expect(page.locator('.conflicts')).toContainText(
+      'Conflitos encontrados',
+    );
+    await page
+      .locator('.conflicts summary')
+      .filter({ hasText: 'hello.txt' })
+      .click();
+    await expect(page.locator('.conflict-content')).toContainText('<<<<<<<');
+    await expect(page.locator('.conflict-content')).toContainText('feature');
+    await expect(page.locator('.conflict-content img')).toHaveCount(0);
+    expect(await page.evaluate(() => window.conflictUnsafe)).toBeUndefined();
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(
+        await page
+          .locator('.conflict-content')
+          .evaluate(
+            (element) => element.scrollWidth <= element.clientWidth + 1,
+          ),
+      ).toBe(true);
+      await page.screenshot({
+        path: `test-results/conflicts-${width}.png`,
+        fullPage: true,
+      });
+    }
   } finally {
     await fixture.dispose();
   }

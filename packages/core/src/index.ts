@@ -70,7 +70,24 @@ export interface Comparison {
   ignoreWhitespace: boolean;
   files: ChangedFile[];
 }
+export interface ConflictAnalysis {
+  clean: boolean;
+  files: {
+    path: string;
+    pathEncoding: 'utf8' | 'lossy';
+    content: string | null;
+    notice: string | null;
+  }[];
+  messages: { paths: string[]; type: string; message: string }[];
+}
 export interface RepositoryReader {
+  readReview(file: ChangedFile): Promise<string | null>;
+  writeReview(file: ChangedFile, value: string): Promise<void>;
+  conflicts(
+    base: string,
+    head: string,
+    signal?: AbortSignal,
+  ): Promise<ConflictAnalysis>;
   info(signal?: AbortSignal): Promise<RepositoryInfo>;
   resolveRef(name: string, signal?: AbortSignal): Promise<string>;
   mergeBases(
@@ -88,6 +105,7 @@ export interface RepositoryReader {
     file: ChangedFile,
     ignoreWhitespace: boolean,
     signal?: AbortSignal,
+    fullContext?: boolean,
   ): Promise<FileDiff>;
   fetch(remote: string, signal?: AbortSignal): Promise<void>;
   release(files: ChangedFile[]): void;
@@ -156,10 +174,48 @@ export function createReviewService(
       comparisons.set(comparison.id, comparison);
       return comparison;
     },
+    async conflicts(
+      comparisonId: string,
+      signal?: AbortSignal,
+    ): Promise<ConflictAnalysis> {
+      const comparison = comparisons.get(comparisonId);
+      if (!comparison)
+        throw new DomainError(
+          'NOT_FOUND',
+          'Comparação expirada. Compare novamente.',
+        );
+      const info = await repository.info(signal);
+      if (info.shallow)
+        throw new DomainError(
+          'INCOMPLETE_HISTORY',
+          'Análise de conflitos requer histórico completo.',
+        );
+      const bases = await repository.mergeBases(
+        comparison.baseCommit,
+        comparison.headCommit,
+        signal,
+      );
+      if (!bases.length)
+        throw new DomainError(
+          'NO_MERGE_BASE',
+          'As branches não têm ancestral comum.',
+        );
+      if (bases.length !== 1)
+        throw new DomainError(
+          'AMBIGUOUS_BASE',
+          'Análise indisponível para múltiplas bases comuns nesta versão.',
+        );
+      return repository.conflicts(
+        comparison.baseCommit,
+        comparison.headCommit,
+        signal,
+      );
+    },
     async file(
       comparisonId: string,
       fileId: string,
       signal?: AbortSignal,
+      fullContext = false,
     ): Promise<FileDiff> {
       const comparison = comparisons.get(comparisonId);
       const file = comparison?.files.find((item) => item.id === fileId);
@@ -168,7 +224,34 @@ export function createReviewService(
           'NOT_FOUND',
           'Comparação ou arquivo expirado. Compare novamente.',
         );
-      return repository.diff(file, comparison.ignoreWhitespace, signal);
+      return repository.diff(
+        file,
+        comparison.ignoreWhitespace,
+        signal,
+        fullContext,
+      );
+    },
+    async annotations(
+      comparisonId: string,
+    ): Promise<Record<string, string | null>> {
+      const comparison = comparisons.get(comparisonId);
+      if (!comparison)
+        throw new DomainError('NOT_FOUND', 'Comparação expirada.');
+      return Object.fromEntries(
+        await Promise.all(
+          comparison.files.map(async (file) => [
+            file.id,
+            await repository.readReview(file),
+          ]),
+        ),
+      );
+    },
+    async annotate(comparisonId: string, fileId: string, value: string) {
+      const file = comparisons
+        .get(comparisonId)
+        ?.files.find((item) => item.id === fileId);
+      if (!file) throw new DomainError('NOT_FOUND', 'Arquivo expirado.');
+      await repository.writeReview(file, value);
     },
     async fetch(remote: string, signal?: AbortSignal) {
       const info = await repository.info(signal);

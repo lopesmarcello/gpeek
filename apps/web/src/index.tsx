@@ -1,20 +1,18 @@
 import { DiffView } from './diff-view.js';
 import { exportReview } from './review-export.js';
-import {
-  ReviewNotes,
-  annotationKey,
-  parseAnnotation,
-  type Annotation,
-} from './review-notes.js';
+import { ReviewNotes, type Annotation } from './review-notes.js';
 import { FileTree } from './file-tree.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  annotationsSchema,
   sessionSchema,
   errorSchema,
   repositorySchema,
   comparisonSchema,
   fileDiffSchema,
+  conflictAnalysisSchema,
+  type ConflictAnalysis,
   type Session,
   type RepositoryInfo,
   type Comparison,
@@ -78,11 +76,16 @@ function App() {
   const [mode, setMode] = useState<'merge-base' | 'direct'>('merge-base');
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [comparison, setComparison] = useState<Comparison>();
+  const [conflicts, setConflicts] = useState<ConflictAnalysis>();
+  const [conflictLoading, setConflictLoading] = useState(false);
+  const conflictOperation = useRef<AbortController>();
   const [annotations, setAnnotations] = useState<Record<string, Annotation>>(
     {},
   );
+  const pendingSaves = useRef<Promise<void>>(Promise.resolve());
   const [storageError, setStorageError] = useState('');
   const [selected, setSelected] = useState('');
+  const [fullContext, setFullContext] = useState(false);
   const [diff, setDiff] = useState<FileDiff>();
   const [loading, setLoading] = useState(false);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -130,11 +133,13 @@ function App() {
       });
     return () => {
       active = false;
+      conflictOperation.current?.abort();
       operation.current?.abort();
       fileOperation.current?.abort();
     };
   }, []);
   async function compare() {
+    await pendingSaves.current;
     operation.current?.abort();
     fileOperation.current?.abort();
     const controller = new AbortController();
@@ -142,6 +147,9 @@ function App() {
     setLoading(true);
     setDiffLoading(false);
     setError('');
+    conflictOperation.current?.abort();
+    setConflicts(undefined);
+    setConflictLoading(false);
     setComparison(undefined);
     setDiff(undefined);
     setSelected('');
@@ -154,18 +162,23 @@ function App() {
         ),
       );
       if (controller.signal.aborted) return;
-      const saved: Record<string, Annotation> = {};
+      let saved: Record<string, Annotation> = {};
       try {
-        for (const item of result.files)
-          saved[item.id] = parseAnnotation(
-            localStorage.getItem(annotationKey(result, item)),
-          );
+        saved = annotationsSchema.parse(
+          await request(
+            `/api/comparisons/${result.id}/annotations`,
+            undefined,
+            controller.signal,
+          ),
+        );
         setStorageError('');
       } catch {
+        if (controller.signal.aborted) return;
         setStorageError(
-          'Armazenamento indisponível. A revisão ficará apenas nesta aba.',
+          'Não foi possível ler a revisão local. A revisão ficará apenas nesta aba.',
         );
       }
+      if (controller.signal.aborted) return;
       setAnnotations(saved);
       setComparison(result);
       if (result.files[0]) void selectFile(result, result.files[0].id);
@@ -175,18 +188,19 @@ function App() {
       if (!controller.signal.aborted) setLoading(false);
     }
   }
-  async function selectFile(snapshot: Comparison, id: string) {
+  async function selectFile(snapshot: Comparison, id: string, full = false) {
     fileOperation.current?.abort();
     const controller = new AbortController();
     fileOperation.current = controller;
     setSelected(id);
+    setFullContext(full);
     setDiff(undefined);
     setDiffLoading(true);
     setError('');
     try {
       const result = fileDiffSchema.parse(
         await request(
-          `/api/comparisons/${snapshot.id}/files/${id}`,
+          `/api/comparisons/${snapshot.id}/files/${id}?context=${full ? 'full' : 'changes'}`,
           undefined,
           controller.signal,
         ),
@@ -196,6 +210,29 @@ function App() {
       if (!controller.signal.aborted) setError(message(cause));
     } finally {
       if (!controller.signal.aborted) setDiffLoading(false);
+    }
+  }
+  async function analyzeConflicts() {
+    if (!comparison) return;
+    conflictOperation.current?.abort();
+    const controller = new AbortController();
+    conflictOperation.current = controller;
+    setConflictLoading(true);
+    setConflicts(undefined);
+    setError('');
+    try {
+      const result = conflictAnalysisSchema.parse(
+        await request(
+          `/api/comparisons/${comparison.id}/conflicts`,
+          undefined,
+          controller.signal,
+        ),
+      );
+      if (!controller.signal.aborted) setConflicts(result);
+    } catch (cause) {
+      if (!controller.signal.aborted) setError(message(cause));
+    } finally {
+      if (!controller.signal.aborted) setConflictLoading(false);
     }
   }
   async function fetchRemote() {
@@ -215,7 +252,9 @@ function App() {
   async function shutdown() {
     operation.current?.abort();
     fileOperation.current?.abort();
+    conflictOperation.current?.abort();
     try {
+      await pendingSaves.current;
       await request('/api/shutdown', {});
       setClosed(true);
     } catch {
@@ -226,18 +265,25 @@ function App() {
   function saveAnnotation(value: Annotation) {
     if (!comparison || !file) return;
     setAnnotations((previous) => ({ ...previous, [file.id]: value }));
-    try {
-      localStorage.setItem(
-        annotationKey(comparison, file),
-        JSON.stringify(value),
-      );
-      setStorageError('');
-    } catch {
-      setStorageError(
-        'Não foi possível salvar a revisão no navegador. As alterações ficam apenas nesta aba.',
-      );
-    }
+    const comparisonId = comparison.id;
+    const fileId = file.id;
+    pendingSaves.current = pendingSaves.current
+      .catch(() => {})
+      .then(async () => {
+        try {
+          await request(
+            `/api/comparisons/${comparisonId}/annotations/${fileId}`,
+            value,
+          );
+          setStorageError('');
+        } catch {
+          setStorageError(
+            'Não foi possível salvar a revisão local. As alterações ficam apenas nesta aba.',
+          );
+        }
+      });
   }
+
   const filtered = useMemo(
     () =>
       comparison?.files.filter((item) =>
@@ -514,6 +560,77 @@ function App() {
               >
                 Exportar revisão (.md)
               </button>
+              <section className="conflicts" aria-label="Conflitos de merge">
+                <h2>Conflitos de merge</h2>
+                <p>
+                  Simula integrar a branch de trabalho na base, usando os SHAs
+                  acima. Working tree e index são preservados. A opção de
+                  whitespace do diff não altera esta análise.
+                </p>
+                <button
+                  className="quiet"
+                  disabled={conflictLoading || loading}
+                  onClick={() => {
+                    void analyzeConflicts();
+                  }}
+                >
+                  {conflictLoading
+                    ? 'Analisando conflitos…'
+                    : 'Analisar conflitos'}
+                </button>
+                {conflictLoading && (
+                  <p role="status">Analisando merge com Git…</p>
+                )}
+                {conflicts && (
+                  <>
+                    <p
+                      role="status"
+                      className={conflicts.clean ? 'added' : 'warning'}
+                    >
+                      {conflicts.clean
+                        ? 'Nenhum conflito encontrado para estes commits.'
+                        : `Conflitos encontrados · ${conflicts.files.length} arquivos em conflito.`}
+                    </p>
+                    <p>
+                      Estratégia padrão do Git em ambiente isolado, sem drivers
+                      externos ou configuração personalizada. O resultado de um
+                      merge no seu ambiente pode variar.
+                    </p>
+                    {conflicts.messages.map((item, index) => (
+                      <div key={index} className="conflict-diagnostic">
+                        <strong>{item.type}</strong>
+                        <pre>{item.message}</pre>
+                      </div>
+                    ))}
+                    {conflicts.files.map((item, index) => (
+                      <details key={index}>
+                        <summary>{item.path}</summary>
+                        {item.pathEncoding === 'lossy' && (
+                          <p className="warning">
+                            Nome aproximado: caminho fora de UTF-8.
+                          </p>
+                        )}
+                        {item.notice && (
+                          <p className="warning">{item.notice}</p>
+                        )}
+                        {item.content !== null && (
+                          <>
+                            <p>
+                              Resultado simulado: primeiro lado = base;
+                              ancestral comum entre ||||||| e =======; segundo
+                              lado = trabalho. Os marcadores pertencem ao
+                              conteúdo produzido pelo Git.
+                            </p>
+                            <pre className="conflict-content">
+                              {item.content}
+                            </pre>
+                          </>
+                        )}
+                      </details>
+                    ))}
+                  </>
+                )}
+              </section>
               <p className="review-storage">
                 {
                   comparison.files.filter((item) => annotations[item.id]?.ok)
@@ -592,6 +709,18 @@ function App() {
                                 ` · Modo ${file.oldMode} → ${file.newMode}`}
                             </p>
                           </div>
+                          <button
+                            type="button"
+                            className="quiet"
+                            aria-pressed={fullContext}
+                            onClick={() =>
+                              void selectFile(comparison, file.id, !fullContext)
+                            }
+                          >
+                            {fullContext
+                              ? 'Ver apenas alterações'
+                              : 'Visualizar arquivo completo'}
+                          </button>
                           <div
                             className="view-toggle"
                             role="group"
@@ -659,6 +788,12 @@ function App() {
                           </p>
                         )}
                       </>
+                    )}
+                    {fullContext && (
+                      <p className="diff-notice">
+                        Arquivo completo · Antes / Depois dos commits da
+                        comparação. Todas as diferenças de espaços são exibidas.
+                      </p>
                     )}
                     {diffLoading && (
                       <p role="status" className="diff-notice">

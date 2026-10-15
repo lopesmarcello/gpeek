@@ -71,3 +71,15 @@ continuam para a fase de experiência de revisão.
 - https://git-scm.com/docs/git-for-each-ref
 - https://git-scm.com/docs/git-cat-file
 - https://git-scm.com/docs/git-fetch
+
+## Contexto completo — 14/10/2026
+
+A rota de diff aceita `context=changes|full`, validado por schema; o padrão
+continua sendo três linhas de contexto. A ação **Visualizar arquivo completo**
+usa os mesmos blobs imutáveis e expande o diff com até 10.000 linhas de contexto,
+com limites existentes de 512 KiB por versão e 10.000 linhas renderizadas.
+O modo completo mostra todas as diferenças de whitespace, mesmo quando a
+comparação resumida as ignora, para preservar o conteúdo integral dos dois lados.
+Arquivos com apenas alteração de metadados mostram todo o texto como contexto.
+Mantém números e comentários Antes/Depois, unificado/lado a lado e avisos de
+indisponibilidade. Não lê working tree nem executa filtros.

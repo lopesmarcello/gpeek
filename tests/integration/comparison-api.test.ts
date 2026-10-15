@@ -6,6 +6,7 @@ import { startLocalServer, createReview } from '../../apps/server/src/index.js';
 import { openRepository } from '../../packages/git/src/index.js';
 import {
   comparisonSchema,
+  conflictAnalysisSchema,
   fileDiffSchema,
   repositorySchema,
 } from '../../packages/contracts/src/index.js';
@@ -61,6 +62,70 @@ it('compares local branches against remote tracking refs through the authenticat
       ).json(),
     );
     expect(diff.hunks[0]?.lines[1]?.text).toBe('feature');
+    const notesUrl = `${server.url}/api/comparisons/${comparison.id}/annotations`;
+    const annotation = {
+      ok: true,
+      comments: ['x'.repeat(5000), { side: 'new', line: 1, text: 'note' }],
+    };
+    expect((await fetch(notesUrl)).status).toBe(401);
+    expect(
+      (
+        await fetch(`${notesUrl}/${comparison.files[0]!.id}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(annotation),
+        })
+      ).status,
+    ).toBe(200);
+    expect(await (await fetch(notesUrl, { headers })).json()).toEqual({
+      [comparison.files[0]!.id]: annotation,
+    });
+    expect(
+      (
+        await fetch(`${notesUrl}/${comparison.files[0]!.id}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            ok: true,
+            comments: [{ side: 'new', line: 0, text: 'bad' }],
+          }),
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await fetch(`${notesUrl}/${comparison.files[0]!.id}`, {
+          method: 'POST',
+          headers: { ...headers, Origin: 'https://attacker.example' },
+          body: JSON.stringify(annotation),
+        })
+      ).status,
+    ).toBe(403);
+    const fileUrl = `${server.url}/api/comparisons/${comparison.id}/files/${comparison.files[0]!.id}`;
+    expect(
+      (await fetch(`${fileUrl}?context=invalid`, { headers })).status,
+    ).toBe(400);
+    const fullResponse = await fetch(`${fileUrl}?context=full`, { headers });
+    expect(fullResponse.status).toBe(200);
+    expect(
+      fileDiffSchema.parse(await fullResponse.json()).hunks[0]?.lines[1]?.text,
+    ).toBe('feature');
+
+    const conflictUrl = `${server.url}/api/comparisons/${comparison.id}/conflicts`;
+    expect((await fetch(conflictUrl)).status).toBe(401);
+    expect(
+      conflictAnalysisSchema.parse(
+        await (await fetch(conflictUrl, { headers })).json(),
+      ).clean,
+    ).toBe(true);
+    expect(
+      (
+        await fetch(
+          `${server.url}/api/comparisons/00000000-0000-0000-0000-000000000000/conflicts`,
+          { headers },
+        )
+      ).status,
+    ).toBe(404);
     expect(
       (
         await fetch(`${server.url}/api/comparisons`, {

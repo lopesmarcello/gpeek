@@ -1,3 +1,5 @@
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import { startLocalServer, createReview } from '@gpeek/server';
@@ -10,6 +12,17 @@ test('reviews a local branch against origin/main with unified and split diff @sm
   const fixture = await createRepositoryFixture();
   let server;
   try {
+    await writeFile(join(fixture.repo, 'new.txt'), 'new file content\n');
+    await fixture.git(['add', '.']);
+    await fixture.git(['commit', '-m', 'add new file']);
+    await fixture.git(['switch', 'main']);
+    await writeFile(
+      join(fixture.repo, 'deleted.txt'),
+      'deleted file content\n',
+    );
+    await fixture.git(['add', '.']);
+    await fixture.git(['commit', '-m', 'base-only file']);
+    await fixture.git(['switch', 'feature']);
     server = await startLocalServer({
       assetsDirectory: fileURLToPath(
         new URL('../../apps/web/dist/', import.meta.url),
@@ -68,6 +81,51 @@ test('reviews a local branch against origin/main with unified and split diff @sm
     await page.getByRole('button', { name: 'Unificado', exact: true }).click();
     await expect(thread.locator('.personal-comments p')).toHaveText(
       'Validar esta implementação',
+    );
+    await page
+      .getByRole('checkbox', { name: 'Arquivo OK', exact: true })
+      .check();
+    await page
+      .getByRole('button', { name: 'Comparar branches', exact: true })
+      .click();
+    await expect(
+      page.getByRole('checkbox', { name: 'Arquivo OK', exact: true }),
+    ).toBeChecked();
+    await expect(thread.locator('.personal-comments p')).toHaveText(
+      'Validar esta implementação',
+    );
+    await server.stop();
+    server = await startLocalServer({
+      assetsDirectory: fileURLToPath(
+        new URL('../../apps/web/dist/', import.meta.url),
+      ),
+      gitVersion: await checkGitVersion(),
+      review: createReview(await openRepository(fixture.repo)),
+    });
+    await page.goto(server.bootstrapUrl);
+    await page
+      .getByRole('button', { name: 'Comparar branches', exact: true })
+      .click();
+    await expect(
+      page.getByRole('checkbox', { name: 'Arquivo OK', exact: true }),
+    ).toBeChecked();
+    await expect(thread.locator('.personal-comments p')).toHaveText(
+      'Validar esta implementação',
+    );
+    await page.getByRole('button', { name: /new.txt — Adicionado/ }).click();
+    await expect(panel.locator('.addition pre')).toHaveText('new file content');
+    await page
+      .getByLabel('Branch base', { exact: true })
+      .selectOption('refs/heads/main');
+    await page
+      .getByLabel('Modo de comparação', { exact: true })
+      .selectOption('direct');
+    await page
+      .getByRole('button', { name: 'Comparar branches', exact: true })
+      .click();
+    await page.getByRole('button', { name: /deleted.txt — Removido/ }).click();
+    await expect(panel.locator('.deletion pre')).toHaveText(
+      'deleted file content',
     );
     await page.getByLabel('Filtrar arquivos', { exact: true }).fill('missing');
     await expect(
